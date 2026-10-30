@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../media/media_item.dart';
+import '../media/live_tv_support.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../media/media_version.dart';
 import '../media/media_version_preference.dart';
 import '../mpv/mpv.dart';
@@ -341,6 +343,44 @@ Future<bool?> navigateToVideoPlayer(
   final mediaClient = serverId != null && (!isOffline || manager.isClientOnline(serverId))
       ? manager.getClient(serverId)
       : null;
+
+  // Library/detail entry points share the DVR tab's fresh bookmark lookup.
+  // Watch Together and explicit start choices retain ownership of their start.
+  if (!isOffline &&
+      watchTogetherCopy == null &&
+      !explicitStartPolicy &&
+      initialPosition == null &&
+      metadata.kind.isVideo &&
+      mediaClient is InProgressRecordingSupport) {
+    MediaItem? recording;
+    try {
+      final active = await (mediaClient as InProgressRecordingSupport).fetchInProgressRecordings();
+      recording = active.where((item) => item.id == metadata.id).firstOrNull;
+    } catch (error) {
+      appLogger.d('Could not refresh active recording resume state', error: error);
+    }
+    if (!context.mounted || !launchCurrent()) return null;
+    recording ??= metadata.isRecordingInProgress ? metadata : null;
+    if (recording != null) {
+      metadata = recording;
+      var requested = Duration.zero;
+      if ((recording.viewOffsetMs ?? 0) > 0) {
+        final resume = await showOptionPickerDialog<bool>(
+          context,
+          title: recording.title ?? t.liveTv.unknownProgram,
+          options: [
+            (icon: Symbols.play_arrow_rounded, label: t.common.resume, value: true),
+            (icon: Symbols.replay_rounded, label: t.liveTv.playFromBeginning, value: false),
+          ],
+        );
+        if (!context.mounted || !launchCurrent() || resume == null) return null;
+        if (resume) requested = Duration(milliseconds: recording.viewOffsetMs!);
+      }
+      initialPosition = requested;
+      explicitStartPolicy = true;
+      metadata = metadata.copyWith(viewOffsetMs: requested.inMilliseconds);
+    }
+  }
 
   // Plain Play on a downloaded item must target the version actually on
   // disk, online too, so the player can open the local copy instead of

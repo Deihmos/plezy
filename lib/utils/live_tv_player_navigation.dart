@@ -6,7 +6,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'dialogs.dart';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../i18n/strings.g.dart';
 
 import '../media/media_item.dart';
@@ -188,38 +187,8 @@ LiveTvServerInfo? liveTvServerInfoForChannel(MultiServerProvider multiServer, Li
   return multiServer.liveTvServers.where((s) => s.serverId == serverId).firstOrNull;
 }
 
-/// Resume bookmarks are fetched at selection time, not from a stale DVR tile.
+/// Use the shared launcher so DVR tiles, library cards and detail pages all
+/// refresh the same bookmark and offer the same resume choice.
 Future<void> navigateToInProgressRecording(BuildContext context, MediaItem item) async {
-  final serverId = item.serverId;
-  final client = serverId == null ? null : context.read<MultiServerProvider>().getClientForServer(ServerId(serverId));
-  var metadata = item;
-  if (client != null) {
-    try {
-      metadata = await client.fetchItem(item.id) ?? item;
-    } catch (error) {
-      appLogger.d('Could not refresh recording bookmark', error: error);
-    }
-  }
-  if (!context.mounted) return;
-  var position = Duration.zero;
-  if ((metadata.viewOffsetMs ?? 0) > 0) {
-    final resume = await showOptionPickerDialog<bool>(
-      context,
-      title: metadata.title ?? t.liveTv.unknownProgram,
-      options: [
-        (icon: Symbols.play_arrow_rounded, label: t.common.resume, value: true),
-        (icon: Symbols.replay_rounded, label: t.liveTv.playFromBeginning, value: false),
-      ],
-    );
-    if (!context.mounted || resume == null) return;
-    if (resume) position = Duration(milliseconds: metadata.viewOffsetMs!);
-  }
-  if (!context.mounted) return;
-  await navigateToVideoPlayer(
-    context,
-    metadata: metadata,
-    initialPosition: position,
-    explicitStartPolicy: true,
-    resolveWatchState: false,
-  );
+  await navigateToVideoPlayer(context, metadata: item, resolveWatchState: false);
 }

@@ -330,7 +330,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         // Non-original audio presets always carry a bitrate by construction.
         ? audioPreset.bitrateKbps! * 1000
         : (preset.videoBitrateKbps ?? 100_000) * 1000;
-    final resumeOffsetMs = metadata.viewOffsetMs;
+    final resumeOffsetMs = options.startPosition?.inMilliseconds ?? metadata.viewOffsetMs;
     final int? transcodeStartTimeTicks = !wantsOriginal && resumeOffsetMs != null && resumeOffsetMs > 0
         ? msToJellyfinTicks(resumeOffsetMs)
         : null;

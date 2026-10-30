@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'video_player/recording_resume_policy.dart';
 import '../services/playback_launch_observer.dart';
 import '../media/ids.dart';
 import 'dart:io';
@@ -563,6 +564,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// a failed in-place source switch restores the latter.
   _PlaybackOpenRequest? _currentOpenRequest;
   _PlaybackOpenRequest? _workingOpenRequest;
+  PlaybackOpenOutcome? _recordingResumeCheckedOutcome;
 
   /// Focus target for the failure views' primary action.
   ///

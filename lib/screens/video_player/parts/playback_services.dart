@@ -92,6 +92,44 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
       if (!await negotiation || stale()) return;
     }
 
+    // A growing recording can reject its initial seek while the source is
+    // preparing. Retry once against this open's rendered, seekable file.
+    if (outcome != null && _recordingResumeCheckedOutcome != outcome && _currentMetadata.isRecordingInProgress) {
+      _recordingResumeCheckedOutcome = outcome;
+      final requested =
+          _currentOpenRequest?.resumePosition ??
+          widget.initialPosition ??
+          Duration(milliseconds: _currentMetadata.viewOffsetMs ?? 0);
+      if (shouldRestoreRecordingResume(
+        isRecordingInProgress: true,
+        requested: requested,
+        actual: currentPlayer.state.position,
+      )) {
+        try {
+          if (!currentPlayer.state.seekable) {
+            await currentPlayer.streams.seekable.firstWhere((value) => value).timeout(const Duration(seconds: 5));
+          }
+          if (!mounted ||
+              _shuttingDown ||
+              player != currentPlayer ||
+              _hasFatalPlaybackError ||
+              _playbackAttempt?.outcome != outcome)
+            return;
+          if (shouldRestoreRecordingResume(
+            isRecordingInProgress: true,
+            requested: requested,
+            actual: currentPlayer.state.position,
+          )) {
+            appLogger.i('Restoring recording resume after its initial seek was lost');
+            await currentPlayer.seek(requested);
+          }
+        } catch (error) {
+          appLogger.w('Could not restore the recording resume position', error: error);
+        }
+        if (stale()) return;
+      }
+    }
+
     // Effects that need the decoded picture — the persisted ambient-lighting
     // restore, its subtitle placement after a swap, the NVScaler HDR skip —
     // apply here, not in the open flow: mpv reports geometry and colour only
