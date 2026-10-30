@@ -2,8 +2,8 @@ name: Patched Android and Apple TV
 on:
   workflow_dispatch:
   push:
-    branches: [emby-commercial-skip-and-recordings]
-    paths: [.github/workflows/patched-builds.yml]
+    branches: [main]
+    paths: ['.github/workflows/patched-builds.yml', 'lib/**', 'test/**']
 permissions:
   contents: read
 jobs:
@@ -25,7 +25,7 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile --no-example
       - name: Build unsigned release APK
-        run: flutter build apk --release --no-pub --build-number=163
+        run: flutter build apk --release --no-pub --build-number=164
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: plezy-android-unsigned
@@ -71,3 +71,23 @@ jobs:
           path: build/tvos-package/plezy-appletv-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
+
+  checks:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile --no-example
+      - name: Run recording and commercial-skip regressions
+        run: >-
+          flutter test --no-pub
+          test/services/in_progress_recordings_test.dart
+          test/services/jellyfin_media_info_test.dart
+          test/widgets/video_controls_select_key_test.dart

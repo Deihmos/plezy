@@ -365,7 +365,7 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
     return items
         .where((view) {
           final ct = (view['CollectionType'] as String?)?.toLowerCase();
-          return ct != 'boxsets' && ct != 'playlists';
+          return ct != 'boxsets' && ct != 'playlists' && ct != 'livetv';
         })
         .map((view) => JellyfinMappers.library(view, serverId: serverId, serverName: serverName, dialect: dialect))
         .whereType<MediaLibrary>()

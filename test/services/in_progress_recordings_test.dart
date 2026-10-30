@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/media/library_query.dart';
 import 'package:plezy/media/media_kind.dart';
@@ -15,7 +16,12 @@ void main() {
         expect(request.url.queryParameters['IsInProgress'], 'true');
         return jsonResponse({
           'Items': [
-            {'Id': 'recording-1', 'Type': 'Recording', 'Name': 'Still recording', 'IsInProgress': true},
+            {
+              'Id': 'recording-1',
+              'Type': 'Recording',
+              'Name': 'Still recording',
+              'UserData': {'PlaybackPositionTicks': 900000000},
+            },
           ],
         });
       },
@@ -23,6 +29,9 @@ void main() {
     addTearDown(client.close);
     final recordings = await client.fetchInProgressRecordings(channelId: 'channel-1');
     expect(recordings.single.id, 'recording-1');
+    expect(recordings.single.isRecordingInProgress, isTrue);
+    expect(recordings.single.viewOffsetMs, 90000);
+    expect(recordings.single.hasActiveProgress, isTrue);
     expect(recordings.single.kind, MediaKind.clip);
     expect(recordings.single.kind.isPlayable, isTrue);
   });
@@ -66,5 +75,43 @@ void main() {
     expect(queriedRecordings, isTrue);
     expect(page.items.single.id, 'growing-file');
     expect(page.totalCount, 1);
+  });
+  test('virtual Live TV view is hidden while the real Recorded TV library remains', () async {
+    final client = testEmbyClient(
+      handler: (request) async {
+        if (request.url.path == '/Users/user-1/Views') {
+          return jsonResponse({
+            'Items': [
+              {'Id': 'virtual-live', 'Type': 'UserView', 'Name': 'Live TV', 'CollectionType': 'livetv'},
+              {'Id': 'real-dvr', 'Type': 'CollectionFolder', 'Name': 'Recorded TV', 'CollectionType': 'mixed'},
+            ],
+          });
+        }
+        if (request.url.path == '/LiveTv/Recordings/Folders') {
+          return jsonResponse({
+            'Items': [
+              {'Id': 'real-dvr'},
+            ],
+          });
+        }
+        fail('Unexpected request: ${request.url}');
+      },
+    );
+    addTearDown(client.close);
+    expect((await client.fetchLibraries()).map((item) => item.id), ['real-dvr']);
+  });
+
+  test('stopping a growing recording reports its final resume position', () async {
+    final client = testEmbyClient(
+      handler: (request) async {
+        expect(request.url.path, '/Sessions/Playing/Stopped');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['ItemId'], 'recording-1');
+        expect(body['PositionTicks'], 900000000);
+        return jsonResponse({}, status: 204);
+      },
+    );
+    addTearDown(client.close);
+    await client.reportPlaybackStopped(itemId: 'recording-1', position: const Duration(seconds: 90));
   });
 }

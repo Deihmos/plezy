@@ -7,12 +7,15 @@ mixin _JellyfinLiveTvMethods on _JellyfinClientInternals {
       queryParameters: {
         'UserId': connection.userId,
         'IsInProgress': 'true',
+        'EnableUserData': 'true',
         'ChannelId': ?channelId,
         'Fields': 'MediaSources,MediaStreams,Overview,DateCreated',
       },
     );
     throwIfHttpError(response);
-    return _mapItems(_itemsArray(response.data));
+    return _mapItems([
+      for (final item in _itemsArray(response.data)) {...item, 'IsInProgress': true},
+    ]);
   }
 
   /// Returns `true` when this server has Live TV configured (channels

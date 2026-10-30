@@ -18,6 +18,7 @@ import '../media/media_item_types.dart';
 import '../widgets/collapsible_text.dart';
 import '../widgets/download_status_icon.dart';
 import '../widgets/watched_indicator.dart';
+import 'recording_indicator.dart';
 import '../widgets/optimized_media_image.dart';
 import '../utils/platform_detector.dart';
 import '../utils/formatters.dart';
@@ -185,6 +186,7 @@ class _EpisodeCardState extends State<EpisodeCard> with ContextMenuTapMixin<Epis
                             ),
                           ),
 
+                          if (episode.isRecordingInProgress) const RecordingIndicator(),
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(

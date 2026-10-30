@@ -10,7 +10,7 @@ import '../../../i18n/strings.g.dart';
 import '../../../media/media_server_client.dart';
 import '../../../media/media_item.dart';
 import '../../../media/live_tv_support.dart';
-import '../../../utils/video_player_navigation.dart';
+import '../../../utils/live_tv_player_navigation.dart';
 import '../../../models/livetv_program.dart';
 import '../../../models/media_grab_operation.dart';
 import '../../../models/media_subscription.dart';
@@ -233,6 +233,11 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
     return entries;
   }
 
+  Future<void> _playRecording(MediaItem item) async {
+    await navigateToInProgressRecording(context, item);
+    if (mounted) await _load();
+  }
+
   Future<void> _onCancelGrab(_GrabEntry entry) async {
     final cancelled = await confirmCancelGrab(context, entry.server.client, entry.op);
     if (cancelled) await _load();
@@ -293,28 +298,12 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
                   focusNode: i == 0 ? _firstTileFocusNode : null,
                   onNavigateUp: i == 0 ? widget.onNavigateUp : null,
                   onBack: widget.onBack,
-                  onSelect: () => unawaited(
-                    navigateToVideoPlayer(
-                      context,
-                      metadata: active[i],
-                      initialPosition: Duration.zero,
-                      explicitStartPolicy: true,
-                      resolveWatchState: false,
-                    ),
-                  ),
+                  onSelect: () => unawaited(_playRecording(active[i])),
                   child: ListTile(
                     title: Text(active[i].title ?? t.liveTv.unknownProgram),
-                    subtitle: Text(t.liveTv.playFromBeginning),
-                    leading: const AppIcon(Symbols.play_arrow_rounded),
-                    onTap: () => unawaited(
-                      navigateToVideoPlayer(
-                        context,
-                        metadata: active[i],
-                        initialPosition: Duration.zero,
-                        explicitStartPolicy: true,
-                        resolveWatchState: false,
-                      ),
-                    ),
+                    subtitle: Text(t.liveTv.recordingInProgress),
+                    leading: const AppIcon(Symbols.fiber_manual_record_rounded, color: Colors.redAccent),
+                    onTap: () => unawaited(_playRecording(active[i])),
                   ),
                 ),
             ],

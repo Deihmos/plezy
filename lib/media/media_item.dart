@@ -377,8 +377,13 @@ sealed class MediaItem with _$MediaItem {
   /// Shared by the per-client merge and the cross-server sort so they agree.
   int get recencySortKey => lastViewedAt ?? addedAt ?? 0;
 
+  /// A growing DVR file is playable before the server's library scan finishes.
+  bool get isRecordingInProgress =>
+      raw?['IsInProgress'] == true || raw?['Status']?.toString().toLowerCase() == 'inprogress';
+
   /// Whether this item has started but not finished playback.
   bool get hasActiveProgress {
+    if (isRecordingInProgress && (viewOffsetMs ?? 0) > 0) return true;
     if (durationMs == null || viewOffsetMs == null) return false;
     return viewOffsetMs! > 0 && viewOffsetMs! < durationMs!;
   }

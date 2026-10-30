@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'dialogs.dart';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../i18n/strings.g.dart';
 
 import '../media/media_item.dart';
@@ -67,14 +68,23 @@ Future<void> navigateToLiveTv(
         context,
         title: t.liveTv.joinSession,
         options: [
-          for (var i = 0; i < recordings.length; i++)
+          for (var i = 0; i < recordings.length; i++) ...[
+            if ((recordings[i].viewOffsetMs ?? 0) > 0)
+              (
+                icon: Symbols.play_arrow_rounded,
+                label: recordings.length == 1
+                    ? t.common.resume
+                    : '${t.common.resume}: ${recordings[i].title ?? t.liveTv.unknownProgram}',
+                value: i * 2,
+              ),
             (
               icon: Symbols.replay_rounded,
               label: recordings.length == 1
                   ? t.liveTv.playFromBeginning
                   : '${t.liveTv.playFromBeginning}: ${recordings[i].title ?? t.liveTv.unknownProgram}',
-              value: i,
+              value: i * 2 + 1,
             ),
+          ],
           (icon: Symbols.live_tv_rounded, label: t.liveTv.watchLive, value: -1),
         ],
       );
@@ -87,8 +97,10 @@ Future<void> navigateToLiveTv(
       if (choice >= 0) {
         await navigateToVideoPlayer(
           context,
-          metadata: recordings[choice],
-          initialPosition: Duration.zero,
+          metadata: recordings[choice ~/ 2],
+          initialPosition: choice.isEven
+              ? Duration(milliseconds: recordings[choice ~/ 2].viewOffsetMs ?? 0)
+              : Duration.zero,
           explicitStartPolicy: true,
           resolveWatchState: false,
           isLaunchCurrent: isLaunchCurrent,
@@ -174,4 +186,40 @@ LiveTvServerInfo? liveTvServerInfoForChannel(MultiServerProvider multiServer, Li
     return multiServer.liveTvServers.where((s) => s.serverId == serverId && s.dvrKey == dvrKey).firstOrNull;
   }
   return multiServer.liveTvServers.where((s) => s.serverId == serverId).firstOrNull;
+}
+
+/// Resume bookmarks are fetched at selection time, not from a stale DVR tile.
+Future<void> navigateToInProgressRecording(BuildContext context, MediaItem item) async {
+  final serverId = item.serverId;
+  final client = serverId == null ? null : context.read<MultiServerProvider>().getClientForServer(ServerId(serverId));
+  var metadata = item;
+  if (client != null) {
+    try {
+      metadata = await client.fetchItem(item.id) ?? item;
+    } catch (error) {
+      appLogger.d('Could not refresh recording bookmark', error: error);
+    }
+  }
+  if (!context.mounted) return;
+  var position = Duration.zero;
+  if ((metadata.viewOffsetMs ?? 0) > 0) {
+    final resume = await showOptionPickerDialog<bool>(
+      context,
+      title: metadata.title ?? t.liveTv.unknownProgram,
+      options: [
+        (icon: Symbols.play_arrow_rounded, label: t.common.resume, value: true),
+        (icon: Symbols.replay_rounded, label: t.liveTv.playFromBeginning, value: false),
+      ],
+    );
+    if (!context.mounted || resume == null) return;
+    if (resume) position = Duration(milliseconds: metadata.viewOffsetMs!);
+  }
+  if (!context.mounted) return;
+  await navigateToVideoPlayer(
+    context,
+    metadata: metadata,
+    initialPosition: position,
+    explicitStartPolicy: true,
+    resolveWatchState: false,
+  );
 }

@@ -39,6 +39,7 @@ import '../i18n/strings.g.dart';
 import 'media_context_menu.dart';
 import 'media_card_list_layout.dart';
 import 'backend_badge.dart';
+import 'recording_indicator.dart';
 import 'optimized_media_image.dart';
 
 const _failedPosterUrlCacheLimit = 512;
@@ -648,6 +649,7 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
     final overlays = <Widget>[
       if (item is MediaItem && _showsWatchedIndicator(item)) WatchedIndicator(item: item),
       if (badgeLabels.isNotEmpty) _CatalogBadges(labels: badgeLabels),
+      if (item is MediaItem && item.isRecordingInProgress) const RecordingIndicator(),
     ];
     return ExcludeSemantics(
       child: _CatalogFocusBorder(
@@ -921,6 +923,7 @@ class _MediaCardList extends StatelessWidget {
                       ),
                       if (item is MediaItem && _showsWatchedIndicator(item as MediaItem))
                         WatchedIndicator(item: item as MediaItem),
+                      if (item is MediaItem && (item as MediaItem).isRecordingInProgress) const RecordingIndicator(),
                     ],
                   ),
                 ),
