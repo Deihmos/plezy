@@ -100,31 +100,34 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
           _currentOpenRequest?.resumePosition ??
           widget.initialPosition ??
           Duration(milliseconds: _currentMetadata.viewOffsetMs ?? 0);
-      if (shouldRestoreRecordingResume(
-        isRecordingInProgress: true,
-        requested: requested,
-        actual: currentPlayer.state.position,
-      )) {
+      if (requested > const Duration(seconds: 2)) {
         try {
-          if (!currentPlayer.state.seekable) {
-            await currentPlayer.streams.seekable.firstWhere((value) => value).timeout(const Duration(seconds: 5));
-          }
-          if (!mounted ||
-              _shuttingDown ||
-              player != currentPlayer ||
-              _hasFatalPlaybackError ||
-              _playbackAttempt?.outcome != outcome)
-            return;
-          if (shouldRestoreRecordingResume(
+          final needsRetry = await waitForRecordingResumeDecision(
             isRecordingInProgress: true,
             requested: requested,
-            actual: currentPlayer.state.position,
-          )) {
-            appLogger.i('Restoring recording resume after its initial seek was lost');
-            await currentPlayer.seek(requested);
+            positions: currentPlayer.streams.position,
+          );
+          if (needsRetry) {
+            if (!currentPlayer.state.seekable) {
+              await currentPlayer.streams.seekable.timeout(const Duration(seconds: 5)).firstWhere((value) => value);
+            }
+            if (!mounted ||
+                _shuttingDown ||
+                player != currentPlayer ||
+                _hasFatalPlaybackError ||
+                _playbackAttempt?.outcome != outcome)
+              return;
+            if (shouldRestoreRecordingResume(
+              isRecordingInProgress: true,
+              requested: requested,
+              actual: currentPlayer.state.position,
+            )) {
+              appLogger.i('Restoring recording resume after a reported position confirmed its initial seek was lost');
+              await currentPlayer.seek(requested);
+            }
           }
         } catch (error) {
-          appLogger.w('Could not restore the recording resume position', error: error);
+          appLogger.w('Could not confirm or restore the recording resume position', error: error);
         }
         if (stale()) return;
       }

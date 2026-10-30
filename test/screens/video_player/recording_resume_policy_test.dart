@@ -29,4 +29,22 @@ void main() {
       );
     }
   });
+  test('waits for a reported position rather than trusting the optimistic bookmark', () async {
+    expect(
+      await waitForRecordingResumeDecision(
+        isRecordingInProgress: true,
+        requested: const Duration(seconds: 90),
+        positions: Stream.value(Duration.zero),
+      ),
+      isTrue,
+    );
+    expect(
+      await waitForRecordingResumeDecision(
+        isRecordingInProgress: true,
+        requested: const Duration(seconds: 90),
+        positions: Stream.value(const Duration(seconds: 90)),
+      ),
+      isFalse,
+    );
+  });
 }

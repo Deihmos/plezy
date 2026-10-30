@@ -533,6 +533,10 @@ class PlayerNative extends PlayerBase {
       // already cleared (#2323).
       'sid=no',
       'secondary-sid=no',
+      // Bind the requested start to the incoming file. A property write made
+      // while replacing another file can be restored away during unload.
+      startPosition > Duration.zero ? 'start=${startPosition.inMilliseconds / 1000.0}' : 'start=none',
+
       // A server-positioned live playlist already starts at the requested
       // offset. FFmpeg's default (-3) can skip much of it before decoding.
       // Keep this file-local and append so other demuxer options survive.

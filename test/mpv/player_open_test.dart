@@ -846,6 +846,29 @@ void main() {
       );
     });
 
+    test('MPV binds resume and restart positions to the file being loaded', () async {
+      final calls = <MethodCall>[];
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        methodHandler: (call) async {
+          calls.add(call);
+          return call.method == 'initialize' ? true : null;
+        },
+        testBody: () async {
+          final player = PlayerNative();
+          try {
+            await player.open(Media('https://example.test/recording.ts', start: const Duration(seconds: 90)));
+            expect((_loadfileArgs(calls).last as String).split(','), contains('start=90.0'));
+            await player.open(Media('https://example.test/recording.ts', start: Duration.zero));
+            expect((_loadfileArgs(calls).last as String).split(','), contains('start=none'));
+          } finally {
+            await player.dispose();
+          }
+        },
+      );
+    });
+
     test('MPV combines server-positioned HLS options with quoted external subtitles', () async {
       final calls = <MethodCall>[];
       await withMockPlayerChannels(
@@ -871,7 +894,7 @@ void main() {
               uri,
               'replace',
               '-1',
-              'sub-files=${_fixedLengthPathList([subtitle])},sid=no,secondary-sid=no,'
+              'sub-files=${_fixedLengthPathList([subtitle])},sid=no,secondary-sid=no,start=none,'
                   'demuxer-lavf-o-append=live_start_index=0,cache-pause-initial=yes,cache-pause-wait=6',
             ]);
           } finally {
@@ -915,7 +938,7 @@ void main() {
               'https://example.test/movie.mkv',
               'replace',
               '-1',
-              'sub-files=${_fixedLengthPathList([english, french])},sid=no,secondary-sid=no',
+              'sub-files=${_fixedLengthPathList([english, french])},sid=no,secondary-sid=no,start=none',
             ]);
             expect(_commandCalls(calls, 'sub-add'), isEmpty);
           } finally {
@@ -959,8 +982,8 @@ void main() {
               'replace',
               '-1',
               Platform.isWindows
-                  ? r'sub-files=%31%/subs/a\b.srt;/subs/c\:d\;e.srt,sid=no,secondary-sid=no'
-                  : r'sub-files=%31%/subs/a\b.srt:/subs/c\\:d;e.srt,sid=no,secondary-sid=no',
+                  ? r'sub-files=%31%/subs/a\b.srt;/subs/c\:d\;e.srt,sid=no,secondary-sid=no,start=none'
+                  : r'sub-files=%31%/subs/a\b.srt:/subs/c\\:d;e.srt,sid=no,secondary-sid=no,start=none',
             ]);
           } finally {
             await player.dispose();
@@ -1073,7 +1096,7 @@ void main() {
               'https://example.test/transcode.m3u8',
               'replace',
               '-1',
-              'sub-files=${_fixedLengthPathList([subtitleUri])},sid=no,secondary-sid=no',
+              'sub-files=${_fixedLengthPathList([subtitleUri])},sid=no,secondary-sid=no,start=none',
             ]);
 
             player.handlePlayerEvent('start-file', null);
