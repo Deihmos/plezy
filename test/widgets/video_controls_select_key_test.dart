@@ -402,6 +402,34 @@ void main() {
   // only key on a remote that means "no thanks" also ended the episode.
   // Desktop, not TV, because Apple TV runs Back on key-down: the normal
   // down-consume/up-act path is where the claim has to hold.
+  group('rewinding commercial breaks', () {
+    final first = MediaMarker(id: 1, type: 'commercial', startTimeOffset: 10000, endTimeOffset: 45000);
+    final second = MediaMarker(id: 2, type: 'commercial', startTimeOffset: 90000, endTimeOffset: 120000);
+
+    playerTest('rewind keeps the manual button and later breaks still auto-skip', markers: [first, second], (
+      tester,
+    ) async {
+      await settings.write(SettingsService.skipCommercialsMode, SkipMarkerMode.auto);
+      await settings.write(SettingsService.autoSkipDelay, 0);
+      player.emitPosition(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+      expect(player.state.position, const Duration(seconds: 45));
+
+      player.emitPosition(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+      expect(player.state.position, const Duration(seconds: 15));
+      expect(find.byType(SkipMarkerButton), findsOneWidget);
+      expect(find.text(t.videoControls.skipCommercial), findsOneWidget);
+      await tester.tap(find.text(t.videoControls.skipCommercial));
+      await tester.pumpAndSettle();
+      expect(player.state.position, const Duration(seconds: 45));
+
+      player.emitPosition(const Duration(seconds: 100));
+      await tester.pumpAndSettle();
+      expect(player.state.position, const Duration(seconds: 120));
+    });
+  });
+
   group('declining a skip prompt', () {
     final introMarker = MediaMarker(id: 1, type: 'intro', startTimeOffset: 10000, endTimeOffset: 45000);
 

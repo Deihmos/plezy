@@ -1013,6 +1013,9 @@ class Translations$settings$en {
 	/// en: 'Skip intros automatically after the delay below'
 	String get skipIntroModeAutoDescription => 'Skip intros automatically after the delay below';
 
+	/// en: 'Skip Commercials'
+	String get skipCommercialsMode => 'Skip Commercials';
+
 	/// en: 'Skip Credits'
 	String get skipCreditsMode => 'Skip Credits';
 
@@ -2499,6 +2502,9 @@ class Translations$videoControls$en {
 
 	/// en: 'Skip Intro'
 	String get skipIntro => 'Skip Intro';
+
+	/// en: 'Skip Commercial'
+	String get skipCommercial => 'Skip Commercial';
 
 	/// en: 'Skip Credits'
 	String get skipCredits => 'Skip Credits';
@@ -4011,6 +4017,9 @@ class Translations$liveTv$en {
 
 	/// en: 'Watch Live'
 	String get watchLive => 'Watch Live';
+
+	/// en: 'Play from beginning'
+	String get playFromBeginning => 'Play from beginning';
 
 	/// en: 'Go to Live'
 	String get goToLive => 'Go to Live';
@@ -8437,6 +8446,7 @@ extension on Translations {
 			'settings.skipIntroModeOffDescription' => 'Play intros normally without a skip button',
 			'settings.skipIntroModeButtonDescription' => 'Show a skip button when an intro starts',
 			'settings.skipIntroModeAutoDescription' => 'Skip intros automatically after the delay below',
+			'settings.skipCommercialsMode' => 'Skip Commercials',
 			'settings.skipCreditsMode' => 'Skip Credits',
 			'settings.skipCreditsModeOffDescription' => 'Play credits normally without a skip button',
 			'settings.skipCreditsModeButtonDescription' => 'Show a skip button when credits start',
@@ -8615,9 +8625,9 @@ extension on Translations {
 			'themeEditor.slots.outline' => 'Outline',
 			'themeEditor.slots.text' => 'Text',
 			'themeEditor.slots.textMuted' => 'Secondary text',
-			'themeEditor.slots.accent' => 'Accent',
 			_ => null,
 		} ?? switch (path) {
+			'themeEditor.slots.accent' => 'Accent',
 			'themeEditor.opacity' => 'Opacity',
 			'themeEditor.hexHint' => '#RRGGBB or #AARRGGBB',
 			'themeEditor.fromOtherThemes' => 'From other themes',
@@ -8945,6 +8955,7 @@ extension on Translations {
 			'videoControls.subtitleDownloadFailed' => 'Failed to download subtitle',
 			'videoControls.searchLanguages' => 'Search languages...',
 			'videoControls.skipIntro' => 'Skip Intro',
+			'videoControls.skipCommercial' => 'Skip Commercial',
 			'videoControls.skipCredits' => 'Skip Credits',
 			'videoControls.nextEpisode' => 'Next Episode',
 			'videoControls.subtitleTrack' => ({required Object n}) => 'Track ${n}',
@@ -9128,10 +9139,10 @@ extension on Translations {
 			'profiles.pinExplain' => '4-digit PIN required to switch profiles.',
 			'profiles.continueButton' => 'Continue',
 			'profiles.pinsDontMatch' => 'PINs don\'t match',
-			'profiles.tokenIdentityMismatch' => 'The Plex profile token resolved to an unexpected server',
-			'connections.sectionTitle' => 'Connections',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.tokenIdentityMismatch' => 'The Plex profile token resolved to an unexpected server',
+			'connections.sectionTitle' => 'Connections',
 			'connections.addConnection' => 'Add connection',
 			'connections.addConnectionSubtitleNoProfile' => 'Sign in with Plex or connect a Jellyfin or Emby server',
 			'connections.addConnectionSubtitleScoped' => ({required Object displayName}) => 'Add to ${displayName}: Plex, Jellyfin, Emby, or another profile connection',
@@ -9604,6 +9615,7 @@ extension on Translations {
 			'liveTv.joinSession' => 'Join Session in Progress',
 			'liveTv.watchFromStart' => ({required Object minutes}) => 'Watch from start (${minutes} min ago)',
 			'liveTv.watchLive' => 'Watch Live',
+			'liveTv.playFromBeginning' => 'Play from beginning',
 			'liveTv.goToLive' => 'Go to Live',
 			'liveTv.record' => 'Record',
 			'liveTv.recordEpisode' => 'Record Episode',
@@ -9641,11 +9653,11 @@ extension on Translations {
 			'liveTv.rulesProcessFailed' => 'Couldn\'t re-evaluate recording rules',
 			'liveTv.recordShow' => 'Record show',
 			'liveTv.recordSettings.startEarly' => 'Start early (seconds)',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.recordSettings.endLate' => 'End late (seconds)',
 			'liveTv.recordSettings.newOnly' => 'Only new episodes',
 			'liveTv.recordSettings.anyChannel' => 'Record on any channel',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.recordSettings.anyTime' => 'Record at any time',
 			'liveTv.recordSettings.skipInLibrary' => 'Skip episodes already in the library',
 			'liveTv.recordSettings.keepUpTo' => 'Episodes to keep',
@@ -10155,11 +10167,11 @@ extension on Translations {
 			'performanceOverlay.playMethod' => 'Play Method',
 			'performanceOverlay.memory' => 'Memory',
 			'performanceOverlay.uiFps' => 'UI FPS',
+			_ => null,
+		} ?? switch (path) {
 			'performanceOverlay.fps' => 'FPS',
 			'performanceOverlay.decoderAndroidHw' => 'Android HW',
 			'performanceOverlay.decoderNvidiaHw' => 'NVIDIA HW',
-			_ => null,
-		} ?? switch (path) {
 			'performanceOverlay.decoderQualcommHw' => 'Qualcomm HW',
 			'performanceOverlay.decoderMediatekHw' => 'MediaTek HW',
 			'performanceOverlay.decoderExynosHw' => 'Exynos HW',

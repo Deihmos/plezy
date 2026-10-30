@@ -655,6 +655,53 @@ void main() {
       expect(extras.chapters.single.thumb, '/Items/folder%2Fitem%20%231%3Fx/Images/Chapter/0?tag=chapter%2Ftag%20%3Fx');
     });
 
+    test('Advertisement chapters produce multiple commercial ranges alongside native markers', () {
+      final extras = jellyfinPlaybackExtrasFromRaw(
+        {
+          'RunTimeTicks': _ticks(600000),
+          'Chapters': [
+            {'Name': 'Programme', 'StartPositionTicks': _ticks(0)},
+            {'Name': 'Advertisement', 'StartPositionTicks': _ticks(120000)},
+            {'Name': 'Programme', 'StartPositionTicks': _ticks(180000)},
+            {'Name': '  ADVERTISEMENT  ', 'StartPositionTicks': _ticks(300000)},
+            {'Name': 'Programme', 'StartPositionTicks': _ticks(360000)},
+            {'Name': 'Advertisement', 'StartPositionTicks': _ticks(570000)},
+          ],
+        },
+        'emby-recording',
+        classifier: classifier,
+        markers: jellyfinMediaSegmentsToMarkers({
+          'Items': [
+            {'Type': 'Intro', 'StartTicks': _ticks(0), 'EndTicks': _ticks(30000)},
+          ],
+        }),
+      );
+      final commercials = extras.markers.where((m) => m.isCommercial).toList();
+      expect(commercials.map((m) => m.startTimeOffset), [120000, 300000, 570000]);
+      expect(commercials.map((m) => m.endTimeOffset), [180000, 360000, 600000]);
+      expect(commercials.every((m) => !m.isCredits), isTrue);
+      expect(extras.markers.where((m) => m.type == 'intro').single.endTimeOffset, 30000);
+      expect(commercials.first.containsPosition(const Duration(seconds: 120)), isTrue);
+      expect(commercials.first.containsPosition(const Duration(seconds: 180)), isFalse);
+    });
+
+    test('commercial chapters require an exact title and a positive known span', () {
+      final extras = jellyfinPlaybackExtrasFromRaw(
+        {
+          'Chapters': [
+            {'Name': 'Advertisement', 'StartPositionTicks': _ticks(0)},
+            {'Name': 'Programme', 'StartPositionTicks': _ticks(0)},
+            {'Name': 'Advertisement for a film', 'StartPositionTicks': _ticks(60000)},
+            {'Name': 'Programme', 'StartPositionTicks': _ticks(120000)},
+            {'Name': 'Advertisement', 'StartPositionTicks': _ticks(180000)},
+          ],
+        },
+        'emby-recording',
+        classifier: classifier,
+      );
+      expect(extras.markers.where((m) => m.isCommercial), isEmpty);
+    });
+
     test('uses default OP and ED chapter patterns for skip markers', () {
       final extras = jellyfinPlaybackExtrasFromRaw(
         {

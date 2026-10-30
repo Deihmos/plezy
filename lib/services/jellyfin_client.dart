@@ -281,6 +281,7 @@ class JellyfinClient
         _JellyfinMetadataEditMethods
     implements
         MediaServerClient,
+        InProgressRecordingSupport,
         SeasonEpisodePagingClient,
         MediaDeletionPermissionClient,
         ScopedMediaServerClient,

@@ -871,9 +871,14 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
   // Position subscription for marker tracking
   StreamSubscription<Duration>? _positionSubscription;
   // Skip-marker state
-  SkipMarkerMode _skipModeFor(MediaMarker marker) =>
-      _settings.read(marker.isCredits ? SettingsService.skipCreditsMode : SettingsService.skipIntroMode);
+  SkipMarkerMode _skipModeFor(MediaMarker marker) {
+    if (marker.isCommercial) return _settings.read(SettingsService.skipCommercialsMode);
+    return _settings.read(marker.isCredits ? SettingsService.skipCreditsMode : SettingsService.skipIntroMode);
+  }
+
   int get _autoSkipDelay => _settings.read(SettingsService.autoSkipDelay);
+  Duration? _lastMarkerPosition;
+  final Set<MediaMarker> _rewoundCommercials = {};
   Timer? _autoSkipTimer;
   final ValueNotifier<double> _autoSkipProgress = ValueNotifier<double>(0.0);
   final ValueNotifier<bool> _autoSkipActive = ValueNotifier<bool>(false);
@@ -964,6 +969,7 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
       SettingsService.rotationLocked,
       SettingsService.skipIntroMode,
       SettingsService.skipCreditsMode,
+      SettingsService.skipCommercialsMode,
       SettingsService.autoSkipDelay,
       SettingsService.videoPlayerNavigationEnabled,
       SettingsService.showPerformanceOverlay,
@@ -975,6 +981,11 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
     // prompt now, not on the next position tick (paused playback never ticks).
     bindEffect(SettingsService.skipIntroMode, (_) => _syncCurrentMarkerForCurrentPosition(), fireImmediately: false);
     bindEffect(SettingsService.skipCreditsMode, (_) => _syncCurrentMarkerForCurrentPosition(), fireImmediately: false);
+    bindEffect(
+      SettingsService.skipCommercialsMode,
+      (_) => _syncCurrentMarkerForCurrentPosition(),
+      fireImmediately: false,
+    );
     _releaseChromeListener = bindListenable(widget.chromeController, _onChromeChanged);
     _releaseSyncOffsetsListener = bindListenable(PlayerSyncOffsets.of(widget.player), _onSyncOffsetsChanged);
     _configureChromeController();
@@ -1086,6 +1097,8 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
         _markers = [];
         _markersLoaded = false;
       });
+      _lastMarkerPosition = null;
+      _rewoundCommercials.clear();
       _clearCurrentMarker();
       _loadPlaybackExtras();
     }

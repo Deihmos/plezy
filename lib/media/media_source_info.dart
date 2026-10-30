@@ -360,6 +360,7 @@ class MediaMarker {
   Duration get endTime => Duration(milliseconds: endTimeOffset);
 
   bool get isCredits => type == 'credits';
+  bool get isCommercial => type == 'commercial';
 
   bool containsPosition(Duration position) {
     final posMs = position.inMilliseconds;
@@ -422,7 +423,8 @@ class PlaybackExtras {
 
   /// Returns [PlaybackExtras] using real markers when available, filling any
   /// missing marker types from the chapters: [classifier]'s intro and credits
-  /// picks, or, for a type whose pattern the user replaced ([introPatternStr],
+  /// picks, exact Advertisement chapters as commercial ranges, or, for a
+  /// type whose pattern the user replaced ([introPatternStr],
   /// [creditsPatternStr]), the chapters whose titles match it.
   /// [forceChapterFallback] prefers chapter-derived markers for any type
   /// they provide. When real markers exist, reclassifies markers with unknown
@@ -471,7 +473,10 @@ class PlaybackExtras {
       // A chapter claimed as the intro is never credits, even when the intro
       // is then dropped for its length.
       final String type;
-      if (customIntro != null ? matches(customIntro) : picks!.intro == i) {
+      if (title?.trim().toLowerCase() == 'advertisement') {
+        if (span.startMs < 0 || span.endMs <= span.startMs) continue;
+        type = 'commercial';
+      } else if (customIntro != null ? matches(customIntro) : picks!.intro == i) {
         if (span.endMs - span.startMs > maxChapterIntroDuration.inMilliseconds) continue;
         type = 'intro';
       } else if (customCredits != null ? matches(customCredits) : picks!.credits == i) {

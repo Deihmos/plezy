@@ -12,6 +12,21 @@ extension _PlexVideoControlsMarkerMethods on _PlexVideoControlsState {
   }
 
   void _syncCurrentMarkerForPosition(Duration position) {
+    final previous = _lastMarkerPosition;
+    _lastMarkerPosition = position;
+    // A rewind across or into a commercial is an intent to watch it. Keep
+    // the manual button, and resume automatic skipping after that break ends.
+    if (previous != null && previous - position > const Duration(milliseconds: 500)) {
+      for (final marker in _markers) {
+        if (marker.isCommercial && marker.endTime > position && marker.startTime < previous) {
+          _rewoundCommercials.add(marker);
+        }
+      }
+    }
+    _rewoundCommercials.removeWhere((marker) => position >= marker.endTime);
+    if (_currentMarker != null && _rewoundCommercials.contains(_currentMarker)) {
+      _cancelAutoSkipTimer();
+    }
     if (!_hasRenderedFirstFrame || _markers.isEmpty || !_markersLoaded) {
       _clearCurrentMarker();
       return;
@@ -111,7 +126,7 @@ extension _PlexVideoControlsMarkerMethods on _PlexVideoControlsState {
     final duration = widget.player.state.duration;
     final isAtEnd = duration > Duration.zero && (duration - endTime).inMilliseconds <= 1000;
 
-    final handsOffToCompletion = marker.isCredits && isAtEnd;
+    final handsOffToCompletion = (marker.isCredits || marker.isCommercial) && isAtEnd;
     if (handsOffToCompletion) {
       if (!skipAutoPlayCountdown && widget.onNext != null) {
         _abandoningBurst(widget.onNext)!.call();
@@ -140,7 +155,15 @@ extension _PlexVideoControlsMarkerMethods on _PlexVideoControlsState {
     _cancelAutoSkipTimer();
     if (!_hasRenderedFirstFrame) return;
 
-    if (!_shouldAutoSkipForMarker(marker) || _autoSkipDelay <= 0) return;
+    if (!_shouldAutoSkipForMarker(marker)) return;
+    if (_autoSkipDelay <= 0) {
+      // Defer until the marker update finishes, without showing a countdown.
+      _autoSkipTimer = Timer(Duration.zero, () {
+        if (!mounted || _currentMarker != marker || !_shouldAutoSkipForMarker(marker)) return;
+        _performAutoSkip(skipAutoPlayCountdown: true);
+      });
+      return;
+    }
 
     _autoSkipProgress.value = 0.0;
     const tickDuration = Duration(milliseconds: 200);
@@ -217,7 +240,8 @@ extension _PlexVideoControlsMarkerMethods on _PlexVideoControlsState {
     unawaited(_skipMarker(skipAutoPlayCountdown: skipAutoPlayCountdown));
   }
 
-  bool _shouldAutoSkipForMarker(MediaMarker marker) => _skipModeFor(marker) == SkipMarkerMode.auto;
+  bool _shouldAutoSkipForMarker(MediaMarker marker) =>
+      _skipModeFor(marker) == SkipMarkerMode.auto && !_rewoundCommercials.contains(marker);
 
   bool _shouldShowAutoSkip() {
     if (_currentMarker == null) return false;

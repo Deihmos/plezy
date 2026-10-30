@@ -94,7 +94,7 @@ enum MediaKind {
       'track' || 'audio' => MediaKind.track,
       'collection' || 'boxset' => MediaKind.collection,
       'playlist' => MediaKind.playlist,
-      'clip' || 'trailer' || 'video' || 'musicvideo' => MediaKind.clip,
+      'clip' || 'trailer' || 'video' || 'musicvideo' || 'recording' => MediaKind.clip,
       'photo' => MediaKind.photo,
       'folder' || 'collectionfolder' => MediaKind.folder,
       _ => MediaKind.unknown,

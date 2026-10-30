@@ -1,4 +1,5 @@
 import 'media_source_info.dart';
+import 'media_item.dart';
 import '../models/livetv_capture_buffer.dart';
 import '../models/livetv_channel.dart';
 import '../models/livetv_dvr.dart';
@@ -237,6 +238,11 @@ abstract class LiveTvSupport {
 /// recording APIs. The payload models are Plex wire shapes; the MediaBrowser
 /// implementation synthesizes them from `/LiveTv/Timers` /
 /// `/LiveTv/SeriesTimers` DTOs.
+/// Optional ability to play recordings before the DVR has finished writing them.
+abstract interface class InProgressRecordingSupport {
+  Future<List<MediaItem>> fetchInProgressRecordings({String? channelId});
+}
+
 abstract class LiveTvDvrSupport {
   Future<List<LiveTvDvr>> fetchDvrs();
   Future<void> reloadGuide(String dvrId);

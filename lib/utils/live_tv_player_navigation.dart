@@ -1,6 +1,9 @@
 import 'dart:async';
 import '../media/ids.dart';
 import '../media/media_backend.dart';
+import '../media/live_tv_support.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'dialogs.dart';
 
 import 'package:flutter/material.dart';
 import '../i18n/strings.g.dart';
@@ -47,6 +50,53 @@ Future<void> navigateToLiveTv(
     launchObserver?.mark('blocked', blocker: 'serverUnavailable');
     showErrorSnackBar(context, Translations.of(context).liveTv.serverNotConnected);
     return;
+  }
+
+  if (startPosition == LiveTvStartPosition.ask && client is InProgressRecordingSupport) {
+    List<MediaItem> recordings = const [];
+    try {
+      recordings = await (client as InProgressRecordingSupport).fetchInProgressRecordings(channelId: channel.key);
+    } catch (error) {
+      appLogger.d('Could not check for a recording in progress', error: error);
+    }
+    if (!context.mounted || !(isLaunchCurrent?.call() ?? true) || !(launchObserver?.isCurrent ?? true)) return;
+    if (recordings.isNotEmpty) {
+      // Padding can overlap two airings on the same channel. Name each
+      // recording rather than guessing which one should restart.
+      final choice = await showOptionPickerDialog<int>(
+        context,
+        title: t.liveTv.joinSession,
+        options: [
+          for (var i = 0; i < recordings.length; i++)
+            (
+              icon: Symbols.replay_rounded,
+              label: recordings.length == 1
+                  ? t.liveTv.playFromBeginning
+                  : '${t.liveTv.playFromBeginning}: ${recordings[i].title ?? t.liveTv.unknownProgram}',
+              value: i,
+            ),
+          (icon: Symbols.live_tv_rounded, label: t.liveTv.watchLive, value: -1),
+        ],
+      );
+      if (!context.mounted ||
+          choice == null ||
+          !(isLaunchCurrent?.call() ?? true) ||
+          !(launchObserver?.isCurrent ?? true)) {
+        return;
+      }
+      if (choice >= 0) {
+        await navigateToVideoPlayer(
+          context,
+          metadata: recordings[choice],
+          initialPosition: Duration.zero,
+          explicitStartPolicy: true,
+          resolveWatchState: false,
+          isLaunchCurrent: isLaunchCurrent,
+          launchObserver: launchObserver,
+        );
+        return;
+      }
+    }
   }
 
   final navigator = Navigator.of(context);

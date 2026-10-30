@@ -1,6 +1,20 @@
 part of '../../jellyfin_client.dart';
 
 mixin _JellyfinLiveTvMethods on _JellyfinClientInternals {
+  Future<List<MediaItem>> fetchInProgressRecordings({String? channelId}) async {
+    final response = await _http.get(
+      '/LiveTv/Recordings',
+      queryParameters: {
+        'UserId': connection.userId,
+        'IsInProgress': 'true',
+        'ChannelId': ?channelId,
+        'Fields': 'MediaSources,MediaStreams,Overview,DateCreated',
+      },
+    );
+    throwIfHttpError(response);
+    return _mapItems(_itemsArray(response.data));
+  }
+
   /// Returns `true` when this server has Live TV configured (channels
   /// available). Probes `/LiveTv/Channels?limit=1`. Used by [MultiServerProvider]
   /// to gate the Live TV menu.

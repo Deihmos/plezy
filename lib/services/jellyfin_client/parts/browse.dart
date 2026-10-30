@@ -312,6 +312,7 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
   /// Single-flight only: once the request settles the next caller re-fetches,
   /// so a library added server-side still shows up on the next refresh.
   Future<List<MediaLibrary>>? _inFlightLibraries;
+  final Set<String> _recordingLibraryIds = {};
 
   @override
   Future<List<MediaLibrary>> fetchLibraries() {
@@ -335,6 +336,28 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
     abort?.throwIfAborted();
     throwIfHttpError(response);
     final items = _itemsArray(response.data);
+    _recordingLibraryIds.clear();
+    for (final view in items) {
+      if ((view['CollectionType'] as String?)?.toLowerCase() == 'livetv' && view['Id'] is String) {
+        _recordingLibraryIds.add(view['Id'] as String);
+      }
+    }
+    if (dialect == MediaBrowserDialect.emby) {
+      try {
+        final folders = await _http.get(
+          '/LiveTv/Recordings/Folders',
+          queryParameters: {'UserId': connection.userId},
+          abort: abort,
+        );
+        throwIfHttpError(folders);
+        for (final folder in _itemsArray(folders.data)) {
+          if (folder['Id'] is String) _recordingLibraryIds.add(folder['Id'] as String);
+        }
+      } catch (error) {
+        abort?.throwIfAborted();
+        appLogger.d('Could not identify recording folders', error: error);
+      }
+    }
     // Both MediaBrowser dialects surface collection (BoxSet) and playlist roots as
     // top-level views. We expose those as per-library tabs instead of
     // standalone library entries — matches the Plex shape and avoids
@@ -385,7 +408,15 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
     // (ParentId, StartIndex, Limit, SortBy/SortOrder, NameStartsWith/
     // NameLessThan, Filters, Fields) and ignores the /Items-only keys.
     final isArtistQuery = query.kind == MediaKind.artist;
-    final endpoint = isArtistQuery ? '/Artists/AlbumArtists' : '/Items';
+    final endpoint = isArtistQuery
+        ? '/Artists/AlbumArtists'
+        : _recordingLibraryIds.contains(libraryId)
+        ? '/LiveTv/Recordings'
+        : '/Items';
+    if (_recordingLibraryIds.contains(libraryId)) {
+      params.remove('IncludeItemTypes');
+      params['Recursive'] = 'true';
+    }
     if (isArtistQuery) {
       params.remove('IncludeItemTypes');
       params.remove('Recursive');
@@ -2032,13 +2063,15 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
   }) async {
     final parentId = library?.id;
     final mapItem = library == null ? _mapItem : _libraryRowMapper(library.id, library.name);
+    final isRecordingLibrary = parentId != null && _recordingLibraryIds.contains(parentId);
     final latestFuture = _safeFetchItemsArray(
-      _latestItemsPath,
+      isRecordingLibrary ? '/LiveTv/Recordings' : _latestItemsPath,
       {
         'Limit': limit.toString(),
         'ParentId': ?parentId,
         'Fields': _hubRowFields,
         'IncludeItemTypes': ?latestItemTypes,
+        if (isRecordingLibrary) ...{'Recursive': 'true', 'SortBy': 'DateCreated', 'SortOrder': 'Descending'},
         ...jellyfinImageQueryParameters,
       },
       retry: retry,

@@ -8,6 +8,9 @@ import '../../../exceptions/media_server_exceptions.dart';
 import '../../../focus/focusable_wrapper.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../media/media_server_client.dart';
+import '../../../media/media_item.dart';
+import '../../../media/live_tv_support.dart';
+import '../../../utils/video_player_navigation.dart';
 import '../../../models/livetv_program.dart';
 import '../../../models/media_grab_operation.dart';
 import '../../../models/media_subscription.dart';
@@ -38,8 +41,15 @@ class _ServerRecordings {
   final MediaServerClient client;
   final List<MediaGrabOperation> grabs;
   final List<MediaSubscription> rules;
+  final List<MediaItem> active;
 
-  const _ServerRecordings({required this.serverId, required this.client, required this.grabs, required this.rules});
+  const _ServerRecordings({
+    required this.serverId,
+    required this.client,
+    required this.grabs,
+    required this.rules,
+    this.active = const [],
+  });
 }
 
 class _GrabEntry {
@@ -156,7 +166,18 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
         if (!_isCurrentLoad(loadGeneration)) return;
         final rules = await dvr.fetchRecordingRules();
         if (!_isCurrentLoad(loadGeneration)) return;
-        results.add(_ServerRecordings(serverId: serverInfo.serverId, client: client, grabs: grabs, rules: rules));
+        var active = const <MediaItem>[];
+        if (client is InProgressRecordingSupport) {
+          try {
+            active = await (client as InProgressRecordingSupport).fetchInProgressRecordings();
+          } catch (error) {
+            appLogger.d('Could not load active recording items', error: error);
+          }
+        }
+        if (!_isCurrentLoad(loadGeneration)) return;
+        results.add(
+          _ServerRecordings(serverId: serverInfo.serverId, client: client, grabs: grabs, rules: rules, active: active),
+        );
       },
       onError: (client, serverInfo, error, stackTrace) {
         if (!_isCurrentLoad(loadGeneration)) return;
@@ -251,16 +272,53 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
       return Center(child: _EmptyMessage(text: _error!));
     }
 
+    final active = [for (final server in _serverRecordings) ...server.active];
     final grabs = _allGrabs;
     final rules = _allRules;
 
-    if (grabs.isEmpty && rules.isEmpty) {
+    if (active.isEmpty && grabs.isEmpty && rules.isEmpty) {
       return Center(child: _EmptyMessage(text: t.liveTv.noScheduledRecordings));
     }
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 8),
       children: [
+        if (active.isNotEmpty)
+          SettingsGroup(
+            title: t.liveTv.recordingInProgress,
+            children: [
+              for (var i = 0; i < active.length; i++)
+                FocusableWrapper(
+                  autofocus: i == 0,
+                  focusNode: i == 0 ? _firstTileFocusNode : null,
+                  onNavigateUp: i == 0 ? widget.onNavigateUp : null,
+                  onBack: widget.onBack,
+                  onSelect: () => unawaited(
+                    navigateToVideoPlayer(
+                      context,
+                      metadata: active[i],
+                      initialPosition: Duration.zero,
+                      explicitStartPolicy: true,
+                      resolveWatchState: false,
+                    ),
+                  ),
+                  child: ListTile(
+                    title: Text(active[i].title ?? t.liveTv.unknownProgram),
+                    subtitle: Text(t.liveTv.playFromBeginning),
+                    leading: const AppIcon(Symbols.play_arrow_rounded),
+                    onTap: () => unawaited(
+                      navigateToVideoPlayer(
+                        context,
+                        metadata: active[i],
+                        initialPosition: Duration.zero,
+                        explicitStartPolicy: true,
+                        resolveWatchState: false,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         if (grabs.isNotEmpty)
           SettingsGroup(
             title: t.liveTv.scheduledRecordings,
@@ -268,8 +326,8 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
               for (var i = 0; i < grabs.length; i++)
                 _GrabTile(
                   entry: grabs[i],
-                  autofocus: i == 0,
-                  focusNode: i == 0 ? _firstTileFocusNode : null,
+                  autofocus: i == 0 && active.isEmpty,
+                  focusNode: i == 0 && active.isEmpty ? _firstTileFocusNode : null,
                   onTap: () => _onCancelGrab(grabs[i]),
                   onNavigateUp: i == 0 ? widget.onNavigateUp : null,
                   onBack: widget.onBack,
@@ -283,8 +341,8 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
               for (var i = 0; i < rules.length; i++)
                 _RuleTile(
                   entry: rules[i],
-                  autofocus: grabs.isEmpty && i == 0,
-                  focusNode: grabs.isEmpty && i == 0 ? _firstTileFocusNode : null,
+                  autofocus: active.isEmpty && grabs.isEmpty && i == 0,
+                  focusNode: active.isEmpty && grabs.isEmpty && i == 0 ? _firstTileFocusNode : null,
                   onTap: () => _onRuleTap(rules[i]),
                   onNavigateUp: grabs.isEmpty && i == 0 ? widget.onNavigateUp : null,
                   onBack: widget.onBack,

@@ -703,6 +703,11 @@ class SettingsService extends BaseSharedPreferencesService {
   static const showChapterMarkersOnTimeline = BoolPref('show_chapter_markers_on_timeline', defaultValue: true);
   static const clickVideoTogglesPlayback = BoolPref('click_video_toggles_playback');
   static const skipIntroMode = _SkipMarkerModePref('skip_intro_mode', legacyKey: _legacyAutoSkipIntroKey);
+  static const skipCommercialsMode = EnumPref<SkipMarkerMode>(
+    'skip_commercials_mode',
+    values: SkipMarkerMode.values,
+    defaultValue: SkipMarkerMode.button,
+  );
   static const skipCreditsMode = _SkipMarkerModePref('skip_credits_mode', legacyKey: _legacyAutoSkipCreditsKey);
 
   /// Previous format-v1 boolean representations of enum preferences, keyed by
@@ -1591,6 +1596,7 @@ class SettingsService extends BaseSharedPreferencesService {
     clickVideoTogglesPlayback,
     skipIntroMode,
     skipCreditsMode,
+    skipCommercialsMode,
     forceSkipMarkerFallback,
     autoSkipDelay,
     introPattern,
@@ -1655,7 +1661,7 @@ class SettingsService extends BaseSharedPreferencesService {
     'rewind_on_resume' || 'display_switch_delay' => (0, 10),
     'sleep_timer_duration' => (5, 240),
     'play_next_countdown' => (0, 30),
-    'auto_skip_delay' => (1, 30),
+    'auto_skip_delay' => (0, 30),
     'subtitle_font_size' => (10, 80),
     'subtitle_border_size' => (0, 5),
     'subtitle_position' => (0, 150),

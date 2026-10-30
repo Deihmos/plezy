@@ -337,6 +337,13 @@ class PlaybackSettingsScreen extends StatelessWidget {
         subtitleBuilder: (mode) => '${_skipMarkerModeLabel(mode)} · ${_skipCreditsModeDescription(mode)}',
         options: SkipMarkerMode.values.map((m) => DialogOption(value: m, title: _skipMarkerModeLabel(m))).toList(),
       ),
+      SettingSelectionTile<SkipMarkerMode>(
+        pref: SettingsService.skipCommercialsMode,
+        icon: Symbols.fast_forward_rounded,
+        title: t.settings.skipCommercialsMode,
+        subtitleBuilder: (mode) => _skipMarkerModeLabel(mode),
+        options: SkipMarkerMode.values.map((m) => DialogOption(value: m, title: _skipMarkerModeLabel(m))).toList(),
+      ),
       SettingSwitchTile(
         pref: SettingsService.forceSkipMarkerFallback,
         icon: Symbols.tune_rounded,
