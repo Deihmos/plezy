@@ -403,6 +403,7 @@ void main() {
   // Desktop, not TV, because Apple TV runs Back on key-down: the normal
   // down-consume/up-act path is where the claim has to hold.
   group('rewinding commercial breaks', () {
+    setUp(() => player.emitPosition(Duration.zero));
     final first = MediaMarker(id: 1, type: 'commercial', startTimeOffset: 10000, endTimeOffset: 45000);
     final second = MediaMarker(id: 2, type: 'commercial', startTimeOffset: 90000, endTimeOffset: 120000);
 
