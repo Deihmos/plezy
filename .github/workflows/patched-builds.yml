@@ -1,0 +1,73 @@
+name: Patched Android and Apple TV
+on:
+  workflow_dispatch:
+  push:
+    branches: [emby-commercial-skip-and-recordings]
+    paths: [.github/workflows/patched-builds.yml]
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile --no-example
+      - name: Build unsigned release APK
+        run: flutter build apk --release --no-pub --build-number=163
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: plezy-android-unsigned
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+  apple-tv:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile --no-example
+      - name: Prepare tvOS engine
+        run: tvos/scripts/fetch_engine.sh
+      - name: Install tvOS pods
+        run: tvos/scripts/pod_install.sh
+      - name: Verify project wiring
+        run: |
+          ruby tvos/scripts/test_wire_mpv.rb
+          ruby tvos/scripts/test_wire_top_shelf.rb
+      - name: Build unsigned Apple TV device app
+        run: |
+          xcodebuild build -workspace tvos/Runner.xcworkspace -scheme Runner \
+            -configuration Release -sdk appletvos -destination 'generic/platform=tvOS' \
+            -derivedDataPath build/tvos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM= COMPILER_INDEX_STORE_ENABLE=NO
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/tvos-package/Payload
+          ditto build/tvos/Build/Products/Release-appletvos/Runner.app build/tvos-package/Payload/Runner.app
+          cd build/tvos-package
+          ditto -c -k --keepParent Payload plezy-appletv-unsigned.ipa
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: plezy-appletv-unsigned
+          path: build/tvos-package/plezy-appletv-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
