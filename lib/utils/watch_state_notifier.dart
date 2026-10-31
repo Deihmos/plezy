@@ -188,7 +188,9 @@ class WatchStateNotifier extends BaseNotifier<WatchStateEvent> {
   }) {
     final serverId = serverIdForEvent(item, notifier: 'WatchStateNotifier', event: 'progress');
     if (serverId == null) return null;
-    final isNowWatched = isWatchedProgress(positionMs: viewOffset, durationMs: duration, threshold: watchedThreshold);
+    final isNowWatched =
+        item.canAutoMarkWatched &&
+        isWatchedProgress(positionMs: viewOffset, durationMs: duration, threshold: watchedThreshold);
     final id = patchId ?? WatchPatchId.session(++_sequence);
 
     notify(

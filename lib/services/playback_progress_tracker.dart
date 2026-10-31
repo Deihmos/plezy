@@ -746,7 +746,8 @@ class PlaybackProgressTracker {
   }
 
   Future<void> _maybeScrobble(MediaServerClient c, Duration position, Duration duration) async {
-    if (_scrobbled ||
+    if (!metadata.canAutoMarkWatched ||
+        _scrobbled ||
         !isWatchedProgress(
           positionMs: position.inMilliseconds,
           durationMs: duration.inMilliseconds,

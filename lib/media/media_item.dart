@@ -381,6 +381,10 @@ sealed class MediaItem with _$MediaItem {
   bool get isRecordingInProgress =>
       raw?['IsInProgress'] == true || raw?['Status']?.toString().toLowerCase() == 'inprogress';
 
+  /// A growing Emby recording has no final duration. Reaching the current
+  /// end of its stream must not automatically mark the recording watched.
+  bool get canAutoMarkWatched => backend != MediaBackend.emby || !isRecordingInProgress;
+
   /// Whether this item has started but not finished playback.
   bool get hasActiveProgress {
     if (isRecordingInProgress && (viewOffsetMs ?? 0) > 0) return true;

@@ -367,6 +367,71 @@ void main() {
     });
   });
 
+  group('Emby recording watched status', () {
+    for (final inProgress in [true, false]) {
+      test('automatic watched status for an Emby recording: inProgress=$inProgress', () async {
+        final metadata = testMediaItem(
+          id: 'recording-watched-status',
+          backend: MediaBackend.emby,
+          kind: MediaKind.clip,
+          serverId: 'srv',
+          raw: {'IsInProgress': inProgress},
+        );
+        final events = <WatchStateEvent>[];
+        final subscription = WatchStateNotifier().stream
+            .where((event) => event.itemId == metadata.id)
+            .listen(events.add);
+        addTearDown(subscription.cancel);
+        final client = _StopMarksWatchedClient();
+        final player = _FakePlayer(position: const Duration(seconds: 95), duration: const Duration(seconds: 100));
+        var watchedHooks = 0;
+        final tracker = PlaybackProgressTracker(
+          client: client,
+          metadata: metadata,
+          player: player,
+          onScrobbled: () async {
+            watchedHooks++;
+          },
+        );
+        addTearDown(tracker.dispose);
+        await tracker.sendProgress('playing');
+        await pumpEventQueue();
+        player.position = const Duration(seconds: 100);
+        await tracker.sendProgress('stopped');
+        await pumpEventQueue();
+        expect(client.updateProgressCalls.map((call) => call.state), ['playing', 'stopped']);
+        expect(client.updateProgressCalls.last.time, 100000);
+        final watched = events.where((event) => event.changeType == WatchStateChangeType.watched);
+        if (inProgress) {
+          expect(watched, isEmpty);
+          expect(watchedHooks, 0);
+          final progress = events.where((event) => event.changeType == WatchStateChangeType.progressUpdate);
+          expect(progress, isNotEmpty);
+          expect(progress.every((event) => event.isNowWatched == false), isTrue);
+          expect(progress.last.viewOffset, 100000);
+        } else {
+          expect(watched, hasLength(1));
+          expect(watchedHooks, 1);
+        }
+      });
+
+      test('progress notifications do not bypass the recording guard: inProgress=$inProgress', () async {
+        final metadata = testMediaItem(
+          id: 'recording-progress-only',
+          backend: MediaBackend.emby,
+          kind: MediaKind.clip,
+          serverId: 'srv',
+          raw: {'IsInProgress': inProgress},
+        );
+        final nextEvent = WatchStateNotifier().stream.firstWhere((event) => event.itemId == metadata.id);
+        WatchStateNotifier().notifyProgress(item: metadata, viewOffset: 100000, duration: 100000);
+        final event = await nextEvent;
+        expect(event.viewOffset, 100000);
+        expect(event.isNowWatched, !inProgress);
+      });
+    }
+  });
+
   group('sendProgress: duration guard', () {
     test('does NOT send progress when duration is zero (player not yet ready)', () async {
       final client = _FakePlexClient();
