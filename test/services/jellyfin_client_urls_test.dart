@@ -1034,6 +1034,46 @@ void main() {
       expect(result.isTranscoding, isTrue);
     });
 
+    test('a single growing recording retries a stale metadata source id', () async {
+      final requests = <Map<String, dynamic>>[];
+      final scoped = _clientWithPlaybackInfo((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        requests.add(body);
+        if (body.containsKey('MediaSourceId')) return jsonResponse({'MediaSources': []});
+        return jsonResponse({
+          'MediaSources': [
+            {
+              'Id': 'active-recording-source',
+              'Container': 'ts',
+              'SupportsTranscoding': true,
+              'TranscodingUrl': '/Videos/item-1/master.m3u8?MediaSourceId=active-recording-source',
+              'MediaStreams': [],
+            },
+          ],
+        });
+      });
+      addTearDown(scoped.close);
+      final result = await scoped.getPlaybackInitialization(
+        PlaybackInitializationOptions(
+          metadata: testMediaItem(
+            id: 'item-1',
+            backend: MediaBackend.emby,
+            kind: MediaKind.movie,
+            raw: {'IsInProgress': true},
+          ),
+          selectedMediaIndex: 0,
+          startPosition: const Duration(seconds: 90),
+        ),
+      );
+      expect(requests, hasLength(2));
+      expect(requests.first['MediaSourceId'], 'src-1');
+      expect(requests.last.containsKey('MediaSourceId'), isFalse);
+      expect(requests.last['StartTimeTicks'], 900000000);
+      expect(result.selectedMediaSourceId, 'active-recording-source');
+      expect(result.streamStartOffset, const Duration(seconds: 90));
+      expect(result.isTranscoding, isTrue);
+    });
+
     test('getPlaybackInitialization sends resume ticks without rewriting TranscodingUrl', () async {
       final playbackInfoUris = <Uri>[];
       final playbackInfoBodies = <String>[];

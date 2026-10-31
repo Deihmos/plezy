@@ -357,9 +357,45 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         // burns the selected embedded stream in rather than serving it as a file the client
         // would fetch as well. A selected external *file* keeps `External`, so it is still
         // delivered as a file - the one case where the client genuinely holds it.
-        burnSubtitles: !wantsOriginal && !requestedSubtitleIsExternalFile,
+        burnSubtitles: (!wantsOriginal || serverRecordingResume) && !requestedSubtitleIsExternalFile,
       );
       chosenSource = _selectNegotiatedMediaSource(negotiation['MediaSources'], bundle.selectedSourceId);
+      if (serverRecordingResume) {
+        void logRecordingSources(String phase, Map<String, dynamic> response) {
+          final rawSources = response['MediaSources'];
+          final sources = rawSources is List
+              ? rawSources.whereType<Map<String, dynamic>>().toList()
+              : const <Map<String, dynamic>>[];
+          appLogger.i(
+            'Recording resume negotiation $phase: sourceCount=${sources.length}, '
+            'matched=${chosenSource != null}, serverError=${response['ErrorCode'] != null}, '
+            'capabilities=${sources.take(3).map((source) => {'directPlay': source['SupportsDirectPlay'] == true, 'directStream': source['SupportsDirectStream'] == true, 'transcode': source['SupportsTranscoding'] == true, 'requiresOpening': source['RequiresOpening'] == true, 'hasOpenToken': source['OpenToken'] is String, 'hasTranscodingUrl': source['TranscodingUrl'] is String && (source['TranscodingUrl'] as String).isNotEmpty}).toList()}',
+          );
+        }
+
+        logRecordingSources('pinned', negotiation);
+        // A growing recording's live source can differ from its metadata's
+        // earlier source id. Do not relax version identity for ordinary VOD
+        // or recordings with alternate versions.
+        if (chosenSource == null && bundle.availableVersions.length == 1) {
+          negotiation = await getPlaybackInfo(
+            metadata.id,
+            maxStreamingBitrate: maxStreamingBitrate,
+            startTimeTicks: transcodeStartTimeTicks,
+            enableDirectPlay: false,
+            enableDirectStream: false,
+            enableTranscoding: true,
+            audioStreamIndex: requestedAudioStreamId,
+            subtitleStreamIndex: requestedSubtitleStreamId,
+            burnSubtitles: !requestedSubtitleIsExternalFile,
+          );
+          final retrySources = negotiation['MediaSources'];
+          if (retrySources is List && retrySources.length == 1) {
+            chosenSource = _selectNegotiatedMediaSource(retrySources, null);
+          }
+          logRecordingSources('unpinned retry', negotiation);
+        }
+      }
     } catch (error, stackTrace) {
       if (serverRecordingResume || !_canUseJellyfinStaticStreamFallback(error)) {
         Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
@@ -475,6 +511,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       playSessionId: playSessionId,
       playMethod: playMethod,
       selectedMediaIndex: bundle.selectedSourceIndex,
+      selectedMediaSourceId: serverRecordingResume ? effectiveSourceId : null,
     );
   }
 
