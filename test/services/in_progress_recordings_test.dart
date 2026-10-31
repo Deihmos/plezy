@@ -18,6 +18,7 @@ void main() {
           'Items': [
             {
               'Id': 'recording-1',
+              'ChannelId': 'channel-1',
               'Type': 'Recording',
               'Name': 'Still recording',
               'UserData': {'PlaybackPositionTicks': 900000000},
@@ -34,6 +35,25 @@ void main() {
     expect(recordings.single.hasActiveProgress, isTrue);
     expect(recordings.single.kind, MediaKind.clip);
     expect(recordings.single.kind.isPlayable, isTrue);
+  });
+
+  test('channel prompt excludes unrelated and unidentified recordings when server filtering is ignored', () async {
+    final client = testEmbyClient(
+      handler: (request) async => jsonResponse({
+        'Items': [
+          {'Id': 'other-channel', 'ChannelId': 'channel-2', 'Type': 'Recording'},
+          {'Id': 'matching-channel', 'ChannelId': 'channel-1', 'Type': 'Recording'},
+          {'Id': 'unknown-channel', 'Type': 'Recording'},
+        ],
+      }),
+    );
+    addTearDown(client.close);
+    expect((await client.fetchInProgressRecordings(channelId: 'channel-1')).map((item) => item.id), [
+      'matching-channel',
+    ]);
+    expect(await client.fetchInProgressRecordings(channelId: 'channel-3'), isEmpty);
+    // The Recordings tab still requests and displays every active recording.
+    expect(await client.fetchInProgressRecordings(), hasLength(3));
   });
 
   test('Emby recording folders use the DVR recording endpoint for paged browsing', () async {

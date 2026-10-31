@@ -14,7 +14,10 @@ mixin _JellyfinLiveTvMethods on _JellyfinClientInternals {
     );
     throwIfHttpError(response);
     return _mapItems([
-      for (final item in _itemsArray(response.data)) {...item, 'IsInProgress': true},
+      for (final item in _itemsArray(response.data))
+        // Some servers return all active recordings despite ChannelId. A
+        // missing channel identity must not offer another channel's recording.
+        if (channelId == null || item['ChannelId']?.toString() == channelId) {...item, 'IsInProgress': true},
     ]);
   }
 

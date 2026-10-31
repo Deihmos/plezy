@@ -25,7 +25,7 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile --no-example
       - name: Build unsigned release APK
-        run: flutter build apk --release --no-pub --build-number=171
+        run: flutter build apk --release --no-pub --build-number=172
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: plezy-android-unsigned
