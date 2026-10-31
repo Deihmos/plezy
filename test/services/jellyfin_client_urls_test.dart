@@ -42,6 +42,7 @@ JellyfinConnection _conn({String accessToken = 'tok-abc', String baseUrl = 'http
 JellyfinClient _clientWithPlaybackInfo(
   Future<http.Response> Function(http.Request request) playbackInfo, {
   List<Map<String, dynamic>>? itemSources,
+  bool emby = false,
 }) {
   final sources =
       itemSources ??
@@ -55,7 +56,7 @@ JellyfinClient _clientWithPlaybackInfo(
         },
       ];
   return JellyfinClient.forTesting(
-    connection: _conn(),
+    connection: emby ? testEmbyConnection(accessToken: 'tok-abc', deviceId: 'dev-xyz') : _conn(),
     httpClient: MockClient((request) {
       if (request.url.path == '/Users/user-1/Items/item-1') {
         return Future.value(jsonResponse({'Id': 'item-1', 'Type': 'Movie', 'Name': 'Movie', 'MediaSources': sources}));
@@ -1010,7 +1011,7 @@ void main() {
             },
           ],
         });
-      });
+      }, emby: true);
       addTearDown(scoped.close);
       final result = await scoped.getPlaybackInitialization(
         PlaybackInitializationOptions(
@@ -1029,6 +1030,9 @@ void main() {
       expect(bodies.single['EnableDirectPlay'], isFalse);
       expect(bodies.single['EnableDirectStream'], isFalse);
       expect(bodies.single['EnableTranscoding'], isTrue);
+      final profiles = (bodies.single['DeviceProfile'] as Map)['TranscodingProfiles'] as List;
+      expect(profiles.where((profile) => profile['Type'] == 'Video').map((profile) => profile['Container']), ['ts']);
+      expect(Uri.parse(result.videoUrl!).path, '/Videos/item-1/live.m3u8');
       expect(Uri.parse(result.videoUrl!).queryParameters['StartTimeTicks'], '900000000');
       expect(result.streamStartOffset, const Duration(seconds: 90));
       expect(result.isTranscoding, isTrue);
@@ -1051,7 +1055,7 @@ void main() {
             },
           ],
         });
-      });
+      }, emby: true);
       addTearDown(scoped.close);
       final result = await scoped.getPlaybackInitialization(
         PlaybackInitializationOptions(

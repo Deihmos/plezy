@@ -350,6 +350,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         enableDirectPlay: serverRecordingResume ? false : null,
         enableDirectStream: serverRecordingResume ? false : null,
         enableTranscoding: serverRecordingResume ? true : null,
+        isLiveTv: serverRecordingResume,
         audioStreamIndex: requestedAudioStreamId,
         subtitleStreamIndex: requestedSubtitleStreamId,
         audioProfile: isTrack,
@@ -385,6 +386,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
             enableDirectPlay: false,
             enableDirectStream: false,
             enableTranscoding: true,
+            isLiveTv: true,
             audioStreamIndex: requestedAudioStreamId,
             subtitleStreamIndex: requestedSubtitleStreamId,
             burnSubtitles: !requestedSubtitleIsExternalFile,
@@ -434,18 +436,9 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         playSessionId = urlSessionId != null && urlSessionId.isNotEmpty
             ? urlSessionId
             : (negotiatedSessionId is String ? negotiatedSessionId : null);
-        final streamUri = Uri.parse(transcodingUrl);
         videoUrl = _withApiKey(
           serverRecordingResume
-              ? streamUri
-                    .replace(
-                      queryParameters: {
-                        for (final entry in streamUri.queryParameters.entries)
-                          if (entry.key.toLowerCase() != 'starttimeticks') entry.key: entry.value,
-                        'StartTimeTicks': transcodeStartTimeTicks.toString(),
-                      },
-                    )
-                    .toString()
+              ? buildEmbyRecordingResumeUrl(transcodingUrl, transcodeStartTimeTicks!)
               : transcodingUrl,
         );
         playMethod = 'Transcode';
