@@ -430,15 +430,7 @@ extension _VideoPlayerLiveTvMethods on VideoPlayerScreenState {
   /// Show "Watch from Start" / "Watch Live" dialog.
   /// Returns true if user chose "Watch from start", false for "Watch Live", null if dismissed.
   Future<bool?> _showWatchFromStartDialog(int effectiveStartEpoch, int nowEpoch) {
-    final minutesAgo = ((nowEpoch - effectiveStartEpoch) / 60).round();
-    return showOptionPickerDialog<bool>(
-      context,
-      title: t.liveTv.joinSession,
-      options: [
-        (icon: Symbols.replay_rounded, label: t.liveTv.watchFromStart(minutes: minutesAgo), value: true),
-        (icon: Symbols.live_tv_rounded, label: t.liveTv.watchLive, value: false),
-      ],
-    );
+    return showLiveTvWatchFromStartDialog(context, effectiveStartEpoch, nowEpoch);
   }
 
   /// Seek the live TV stream to an absolute epoch second by rebuilding the

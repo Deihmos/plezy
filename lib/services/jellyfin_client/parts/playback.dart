@@ -324,23 +324,14 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
               track.isExternalFile &&
               CodecUtils.isTextSubtitleCodec(track.codec),
         );
-    final resumeOffsetMs = options.startPosition?.inMilliseconds ?? metadata.viewOffsetMs;
-    // A growing Emby recording needs seekable HLS segments, rather than its
-    // unseekable raw TS response. The player still seeks to the bookmark:
-    // Emby's live HLS encoder starts at the beginning of the recording.
-    final recordingResume =
-        metadata.backend == MediaBackend.emby && metadata.isRecordingInProgress && (resumeOffsetMs ?? 0) > 0;
     final int? maxStreamingBitrate = wantsOriginal
-        // Omitting this lets Emby apply its 8 Mbps default, unnecessarily
-        // encoding a recording that could be remuxed into segments quickly.
-        ? recordingResume
-              ? 200_000_000
-              : null
+        ? null
         : isTrack
+        // Non-original audio presets always carry a bitrate by construction.
         ? audioPreset.bitrateKbps! * 1000
         : (preset.videoBitrateKbps ?? 100_000) * 1000;
-    final int? transcodeStartTimeTicks =
-        (!wantsOriginal || recordingResume) && resumeOffsetMs != null && resumeOffsetMs > 0
+    final resumeOffsetMs = metadata.viewOffsetMs;
+    final int? transcodeStartTimeTicks = !wantsOriginal && resumeOffsetMs != null && resumeOffsetMs > 0
         ? msToJellyfinTicks(resumeOffsetMs)
         : null;
     Map<String, dynamic>? negotiation;
@@ -351,10 +342,6 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         maxStreamingBitrate: maxStreamingBitrate,
         mediaSourceId: bundle.selectedSourceId,
         startTimeTicks: transcodeStartTimeTicks,
-        enableDirectPlay: recordingResume ? false : null,
-        enableDirectStream: recordingResume ? true : null,
-        enableTranscoding: recordingResume ? true : null,
-        isLiveTv: recordingResume,
         audioStreamIndex: requestedAudioStreamId,
         subtitleStreamIndex: requestedSubtitleStreamId,
         audioProfile: isTrack,
@@ -362,48 +349,11 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         // burns the selected embedded stream in rather than serving it as a file the client
         // would fetch as well. A selected external *file* keeps `External`, so it is still
         // delivered as a file - the one case where the client genuinely holds it.
-        burnSubtitles: (!wantsOriginal || recordingResume) && !requestedSubtitleIsExternalFile,
+        burnSubtitles: !wantsOriginal && !requestedSubtitleIsExternalFile,
       );
       chosenSource = _selectNegotiatedMediaSource(negotiation['MediaSources'], bundle.selectedSourceId);
-      if (recordingResume) {
-        void logRecordingSources(String phase, Map<String, dynamic> response) {
-          final rawSources = response['MediaSources'];
-          final sources = rawSources is List
-              ? rawSources.whereType<Map<String, dynamic>>().toList()
-              : const <Map<String, dynamic>>[];
-          appLogger.i(
-            'Recording resume negotiation $phase: sourceCount=${sources.length}, '
-            'matched=${chosenSource != null}, serverError=${response['ErrorCode'] != null}, '
-            'capabilities=${sources.take(3).map((source) => {'directPlay': source['SupportsDirectPlay'] == true, 'directStream': source['SupportsDirectStream'] == true, 'transcode': source['SupportsTranscoding'] == true, 'requiresOpening': source['RequiresOpening'] == true, 'hasOpenToken': source['OpenToken'] is String, 'hasTranscodingUrl': source['TranscodingUrl'] is String && (source['TranscodingUrl'] as String).isNotEmpty}).toList()}',
-          );
-        }
-
-        logRecordingSources('pinned', negotiation);
-        // A growing recording's live source can differ from its metadata's
-        // earlier source id. Do not relax version identity for ordinary VOD
-        // or recordings with alternate versions.
-        if (chosenSource == null && bundle.availableVersions.length == 1) {
-          negotiation = await getPlaybackInfo(
-            metadata.id,
-            maxStreamingBitrate: maxStreamingBitrate,
-            startTimeTicks: transcodeStartTimeTicks,
-            enableDirectPlay: false,
-            enableDirectStream: true,
-            enableTranscoding: true,
-            isLiveTv: true,
-            audioStreamIndex: requestedAudioStreamId,
-            subtitleStreamIndex: requestedSubtitleStreamId,
-            burnSubtitles: !requestedSubtitleIsExternalFile,
-          );
-          final retrySources = negotiation['MediaSources'];
-          if (retrySources is List && retrySources.length == 1) {
-            chosenSource = _selectNegotiatedMediaSource(retrySources, null);
-          }
-          logRecordingSources('unpinned retry', negotiation);
-        }
-      }
     } catch (error, stackTrace) {
-      if (recordingResume || !_canUseJellyfinStaticStreamFallback(error)) {
+      if (!_canUseJellyfinStaticStreamFallback(error)) {
         Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
       }
       appLogger.w(
@@ -431,7 +381,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       }
 
       final transcodingUrl = chosenSource['TranscodingUrl'];
-      if ((!wantsOriginal || recordingResume) && transcodingUrl is String && transcodingUrl.isNotEmpty) {
+      if (!wantsOriginal && transcodingUrl is String && transcodingUrl.isNotEmpty) {
         // TranscodingUrl is server-relative and already encodes container,
         // codecs, MediaSourceId, and PlaySessionId; we just append the
         // dialect's token query parameter for auth.
@@ -440,9 +390,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         playSessionId = urlSessionId != null && urlSessionId.isNotEmpty
             ? urlSessionId
             : (negotiatedSessionId is String ? negotiatedSessionId : null);
-        videoUrl = _withApiKey(
-          recordingResume ? buildEmbyRecordingResumeUrl(transcodingUrl, transcodeStartTimeTicks!) : transcodingUrl,
-        );
+        videoUrl = _withApiKey(transcodingUrl);
         playMethod = 'Transcode';
         isTranscoding = true;
       } else if (!wantsOriginal && chosenSource['SupportsDirectPlay'] != true) {
@@ -451,11 +399,6 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         // `TranscodingUrl`, which is the capped request succeeding.
         fallbackReason = TranscodeFallbackReason.directPlayOnly;
       }
-    }
-
-    if (recordingResume && !isTranscoding) {
-      // A static fallback would silently restart the same unseekable stream.
-      throw PlaybackException(t.messages.noVideoUrl, reason: PlaybackFailureReason.noPlayableSource);
     }
 
     final effectiveAudioStreamId = _resolveJellyfinAudioStreamId(requestedAudioStreamId, mediaInfo);
@@ -505,7 +448,6 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       playSessionId: playSessionId,
       playMethod: playMethod,
       selectedMediaIndex: bundle.selectedSourceIndex,
-      selectedMediaSourceId: recordingResume ? effectiveSourceId : null,
     );
   }
 

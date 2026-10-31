@@ -141,10 +141,6 @@ class PlaybackInitializationResult {
   /// `true` when [videoUrl] points at a backend transcoding stream.
   final bool isTranscoding;
 
-  /// Item time represented by stream position zero when the server has
-  /// already positioned a growing recording. Prevents a second client seek.
-  final Duration streamStartOffset;
-
   /// Non-null when a non-original preset was requested but fallback kicked in.
   final TranscodeFallbackReason? fallbackReason;
 
@@ -189,7 +185,6 @@ class PlaybackInitializationResult {
     this.subtitleSidecars = const [],
     this.isOffline = false,
     this.isTranscoding = false,
-    this.streamStartOffset = Duration.zero,
     this.fallbackReason,
     this.activeAudioStreamId,
     this.playSessionId,

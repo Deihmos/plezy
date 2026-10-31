@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import '../media/ids.dart';
+import '../media/media_backend.dart';
 
 import 'package:flutter/material.dart';
 
@@ -5100,13 +5101,17 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       if (episode != null) {
         final fresh = _fresh(episode);
         // Check if episode has been partially watched
-        if (fresh.viewOffsetMs != null && fresh.viewOffsetMs! > 0) {
+        if (!(fresh.backend == MediaBackend.emby && fresh.isRecordingInProgress) &&
+            fresh.viewOffsetMs != null &&
+            fresh.viewOffsetMs! > 0) {
           return Symbols.resume_rounded; // Resume icon
         }
       }
     } else {
       // For movies or episodes
-      if (metadata.viewOffsetMs != null && metadata.viewOffsetMs! > 0) {
+      if (!(metadata.backend == MediaBackend.emby && metadata.isRecordingInProgress) &&
+          metadata.viewOffsetMs != null &&
+          metadata.viewOffsetMs! > 0) {
         return Symbols.resume_rounded; // Resume icon
       }
     }

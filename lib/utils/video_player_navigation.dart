@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../media/media_item.dart';
+import '../media/media_backend.dart';
 import '../media/live_tv_support.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import '../media/media_version.dart';
 import '../media/media_version_preference.dart';
 import '../mpv/mpv.dart';
@@ -28,13 +28,13 @@ import '../services/playback_coordinator.dart';
 import '../services/music/music_playback_service.dart';
 import 'app_logger.dart';
 import 'dialogs.dart';
+import '../i18n/strings.g.dart';
 import 'global_key_utils.dart';
 import 'platform_detector.dart';
 import 'download_version_utils.dart';
 import 'media_version_resolver.dart';
 import 'provider_extensions.dart';
 import 'quality_preset_labels.dart';
-import '../i18n/strings.g.dart';
 
 const String kVideoPlayerRouteName = '/video_player';
 
@@ -344,41 +344,28 @@ Future<bool?> navigateToVideoPlayer(
       ? manager.getClient(serverId)
       : null;
 
-  // Library/detail entry points share the DVR tab's fresh bookmark lookup.
-  // Watch Together and explicit start choices retain ownership of their start.
+  // Growing Emby recordings start at the beginning until their stream can
+  // reliably resume. Apply this at every library, detail and DVR entry point.
   if (!isOffline &&
       watchTogetherCopy == null &&
-      !explicitStartPolicy &&
-      initialPosition == null &&
+      metadata.backend == MediaBackend.emby &&
       metadata.kind.isVideo &&
       mediaClient is InProgressRecordingSupport) {
     MediaItem? recording;
+    var refreshed = false;
     try {
       final active = await (mediaClient as InProgressRecordingSupport).fetchInProgressRecordings();
       recording = active.where((item) => item.id == metadata.id).firstOrNull;
+      refreshed = true;
     } catch (error) {
-      appLogger.d('Could not refresh active recording resume state', error: error);
+      appLogger.d('Could not refresh active recording state', error: error);
     }
     if (!context.mounted || !launchCurrent()) return null;
-    recording ??= metadata.isRecordingInProgress ? metadata : null;
+    if (!refreshed && metadata.isRecordingInProgress) recording = metadata;
     if (recording != null) {
-      metadata = recording;
-      var requested = Duration.zero;
-      if ((recording.viewOffsetMs ?? 0) > 0) {
-        final resume = await showOptionPickerDialog<bool>(
-          context,
-          title: recording.title ?? t.liveTv.unknownProgram,
-          options: [
-            (icon: Symbols.play_arrow_rounded, label: t.common.resume, value: true),
-            (icon: Symbols.replay_rounded, label: t.liveTv.playFromBeginning, value: false),
-          ],
-        );
-        if (!context.mounted || !launchCurrent() || resume == null) return null;
-        if (resume) requested = Duration(milliseconds: recording.viewOffsetMs!);
-      }
-      initialPosition = requested;
+      metadata = recording.copyWith(viewOffsetMs: 0);
+      initialPosition = Duration.zero;
       explicitStartPolicy = true;
-      metadata = metadata.copyWith(viewOffsetMs: requested.inMilliseconds);
     }
   }
 

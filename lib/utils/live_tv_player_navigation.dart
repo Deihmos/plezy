@@ -4,6 +4,7 @@ import '../media/media_backend.dart';
 import '../media/live_tv_support.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dialogs.dart';
+import 'live_tv_start_dialog.dart';
 
 import 'package:flutter/material.dart';
 import '../i18n/strings.g.dart';
@@ -60,7 +61,38 @@ Future<void> navigateToLiveTv(
       appLogger.d('Could not check for a recording in progress', error: error);
     }
     if (!context.mounted || !(isLaunchCurrent?.call() ?? true) || !(launchObserver?.isCurrent ?? true)) return;
-    if (recordings.isNotEmpty) {
+    if (client.backend == MediaBackend.emby) {
+      // No recording means there is no "from beginning" choice. Passing
+      // live also suppresses a second prompt from a buffered tune.
+      if (recordings.isNotEmpty) {
+        final recording = latestInProgressRecording(recordings);
+        final nowEpoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        final choice = await showLiveTvWatchFromStartDialog(
+          context,
+          recordingStartEpoch(recording) ?? nowEpoch,
+          nowEpoch,
+        );
+        if (!context.mounted ||
+            choice == null ||
+            !(isLaunchCurrent?.call() ?? true) ||
+            !(launchObserver?.isCurrent ?? true)) {
+          return;
+        }
+        if (choice) {
+          await navigateToVideoPlayer(
+            context,
+            metadata: recording.copyWith(viewOffsetMs: 0),
+            initialPosition: Duration.zero,
+            explicitStartPolicy: true,
+            resolveWatchState: false,
+            isLaunchCurrent: isLaunchCurrent,
+            launchObserver: launchObserver,
+          );
+          return;
+        }
+      }
+      startPosition = LiveTvStartPosition.live;
+    } else if (recordings.isNotEmpty) {
       // Padding can overlap two airings on the same channel. Name each
       // recording rather than guessing which one should restart.
       final choice = await showOptionPickerDialog<int>(
@@ -187,8 +219,19 @@ LiveTvServerInfo? liveTvServerInfoForChannel(MultiServerProvider multiServer, Li
   return multiServer.liveTvServers.where((s) => s.serverId == serverId).firstOrNull;
 }
 
-/// Use the shared launcher so DVR tiles, library cards and detail pages all
-/// refresh the same bookmark and offer the same resume choice.
+/// Use the shared launcher so growing Emby recordings start from the beginning
+/// from DVR tiles, library cards and detail pages alike.
 Future<void> navigateToInProgressRecording(BuildContext context, MediaItem item) async {
   await navigateToVideoPlayer(context, metadata: item, resolveWatchState: false);
+}
+
+/// Prefer the newest airing when recording padding overlaps on one channel.
+MediaItem latestInProgressRecording(List<MediaItem> recordings) => recordings.reduce(
+  (latest, next) => (recordingStartEpoch(next) ?? 0) > (recordingStartEpoch(latest) ?? 0) ? next : latest,
+);
+
+int? recordingStartEpoch(MediaItem recording) {
+  final start = recording.raw?['StartDate'];
+  final milliseconds = start is String ? DateTime.tryParse(start)?.millisecondsSinceEpoch : null;
+  return milliseconds == null ? recording.addedAt : milliseconds ~/ 1000;
 }

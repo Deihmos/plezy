@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'video_player/recording_resume_policy.dart';
 import '../services/playback_launch_observer.dart';
 import '../media/ids.dart';
 import 'dart:io';
@@ -87,6 +86,7 @@ import '../providers/shader_provider.dart';
 import '../providers/account_preferences_controller.dart';
 import '../utils/app_logger.dart';
 import '../utils/dialogs.dart';
+import '../utils/live_tv_start_dialog.dart';
 import '../utils/log_redaction_manager.dart';
 import '../utils/immersive_mode_guard.dart';
 import '../utils/live_tv_player_navigation.dart';
@@ -411,17 +411,7 @@ _PlaybackOpenTiming _playbackOpenTiming({
   required Duration? resumePosition,
   required int? durationMs,
   MediaPartTimeline? partTimeline,
-  Duration streamStartOffset = Duration.zero,
 }) {
-  if (streamStartOffset > Duration.zero) {
-    return _PlaybackOpenTiming(
-      mediaStart: streamStartOffset,
-      timelineOffset: streamStartOffset,
-      timelineDuration: durationMs != null && durationMs > streamStartOffset.inMilliseconds
-          ? Duration(milliseconds: durationMs)
-          : null,
-    );
-  }
   if (partTimeline != null) {
     // One file of a stacked item: the player lays it onto the item timeline.
     // A resume it does not hold — the file holding it is gone, or a download
@@ -574,7 +564,6 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// a failed in-place source switch restores the latter.
   _PlaybackOpenRequest? _currentOpenRequest;
   _PlaybackOpenRequest? _workingOpenRequest;
-  PlaybackOpenOutcome? _recordingResumeCheckedOutcome;
 
   /// Focus target for the failure views' primary action.
   ///

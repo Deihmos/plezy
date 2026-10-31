@@ -92,47 +92,6 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
       if (!await negotiation || stale()) return;
     }
 
-    // A growing recording can reject its initial seek while the source is
-    // preparing. Retry once against this open's rendered, seekable file.
-    if (outcome != null && _recordingResumeCheckedOutcome != outcome && _currentMetadata.isRecordingInProgress) {
-      _recordingResumeCheckedOutcome = outcome;
-      final requested =
-          _currentOpenRequest?.resumePosition ??
-          widget.initialPosition ??
-          Duration(milliseconds: _currentMetadata.viewOffsetMs ?? 0);
-      if (requested > const Duration(seconds: 2)) {
-        try {
-          final needsRetry = await waitForRecordingResumeDecision(
-            isRecordingInProgress: true,
-            requested: requested,
-            positions: currentPlayer.streams.position,
-          );
-          if (needsRetry) {
-            if (!currentPlayer.state.seekable) {
-              await currentPlayer.streams.seekable.timeout(const Duration(seconds: 5)).firstWhere((value) => value);
-            }
-            if (!mounted ||
-                _shuttingDown ||
-                player != currentPlayer ||
-                _hasFatalPlaybackError ||
-                _playbackAttempt?.outcome != outcome)
-              return;
-            if (shouldRestoreRecordingResume(
-              isRecordingInProgress: true,
-              requested: requested,
-              actual: currentPlayer.state.position,
-            )) {
-              appLogger.i('Restoring recording resume after a reported position confirmed its initial seek was lost');
-              await currentPlayer.seek(requested);
-            }
-          }
-        } catch (error) {
-          appLogger.w('Could not confirm or restore the recording resume position', error: error);
-        }
-        if (stale()) return;
-      }
-    }
-
     // Effects that need the decoded picture — the persisted ambient-lighting
     // restore, its subtitle placement after a swap, the NVScaler HDR skip —
     // apply here, not in the open flow: mpv reports geometry and colour only

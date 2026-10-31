@@ -25,7 +25,7 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile --no-example
       - name: Build unsigned release APK
-        run: flutter build apk --release --no-pub --build-number=170
+        run: flutter build apk --release --no-pub --build-number=171
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: plezy-android-unsigned
@@ -90,7 +90,8 @@ jobs:
           flutter test --no-pub
           test/services/jellyfin_client_urls_test.dart
           test/mpv/player_open_test.dart
-          test/screens/video_player/recording_resume_policy_test.dart
+          test/utils/live_tv_start_dialog_test.dart
+          test/utils/live_tv_player_navigation_test.dart
           test/services/in_progress_recordings_test.dart
           test/services/jellyfin_media_info_test.dart
           test/widgets/video_controls_select_key_test.dart

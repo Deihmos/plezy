@@ -23,14 +23,6 @@ extension _VideoPlayerSeekingMethods on VideoPlayerScreenState {
       await _eofRecovery.retry(reason: 'seek', resumePosition: target);
       return;
     }
-    if (_currentMetadata.isRecordingInProgress &&
-        currentPlayer.timelineOffset > Duration.zero &&
-        target < currentPlayer.timelineOffset &&
-        !widget.isLive) {
-      if (!(isCurrent?.call() ?? true)) return;
-      await _openStackedPartAt(target, reason: 'recording seek before server stream origin');
-      return;
-    }
     // A stacked item's other file: a native seek cannot leave the open one.
     final partTimeline = _currentMediaInfo?.partTimeline;
     if (!widget.isLive && partTimeline != null && !partTimeline.covers(target)) {

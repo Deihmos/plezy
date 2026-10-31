@@ -4,6 +4,11 @@ import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/models/livetv_channel.dart';
 import 'package:plezy/media/ids.dart';
 import 'package:plezy/media/media_backend.dart';
+import 'package:plezy/media/media_item.dart';
+import 'package:plezy/media/media_kind.dart';
+import 'package:plezy/media/live_tv_support.dart';
+import 'package:plezy/screens/video_player/live_tv_session_args.dart';
+import 'package:plezy/utils/video_player_navigation.dart';
 import 'package:plezy/media/media_server_client.dart';
 import 'package:plezy/media/server_capabilities.dart';
 import 'package:plezy/providers/multi_server_provider.dart';
@@ -46,6 +51,72 @@ void main() {
       ),
     );
   }
+
+  testWidgets('Emby channel without an active recording launches live without a prompt', (tester) async {
+    final client = _RecordingClient(ServerId('emby-1'), const []);
+    manager.debugRegisterClientForTesting(client);
+    multiServer.debugSetLiveTvServersForTesting([LiveTvServerInfo(serverId: 'emby-1', dvrKey: 'dvr-1')]);
+    final channel = LiveTvChannel(key: 'channel-1', serverId: 'emby-1', liveDvrKey: 'dvr-1');
+    final observer = _PlayerObserver();
+    late BuildContext host;
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorObservers: [observer],
+        home: Builder(
+          builder: (context) {
+            host = context;
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+    await navigateToLiveTv(host, multiServer: multiServer, channel: channel, channels: [channel]);
+    final route = observer.playerRoute!;
+    final screen =
+        route.pageBuilder(host, const AlwaysStoppedAnimation(1), const AlwaysStoppedAnimation(1)) as VideoPlayerScreen;
+    expect(screen.live!.startPosition, LiveTvStartPosition.live);
+    expect(client.requestedChannel, 'channel-1');
+    // Inspect the committed launch before the native player mounts.
+    Navigator.of(host).removeRoute(route);
+    await tester.pumpAndSettle();
+    expect(find.text(t.liveTv.joinSession), findsNothing);
+  });
+
+  testWidgets('Emby recording channel uses the shared two-choice prompt and can cancel', (tester) async {
+    final client = _RecordingClient(ServerId('emby-1'), [
+      MediaItem(
+        id: 'recording-1',
+        backend: MediaBackend.emby,
+        kind: MediaKind.clip,
+        raw: {
+          'IsInProgress': true,
+          'StartDate': DateTime.now().subtract(const Duration(minutes: 10)).toUtc().toIso8601String(),
+        },
+      ).copyWith(viewOffsetMs: 90000),
+    ]);
+    manager.debugRegisterClientForTesting(client);
+    multiServer.debugSetLiveTvServersForTesting([LiveTvServerInfo(serverId: 'emby-1', dvrKey: 'dvr-1')]);
+    final channel = LiveTvChannel(key: 'channel-1', serverId: 'emby-1', liveDvrKey: 'dvr-1');
+    await pumpLauncher(tester, channel);
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text(t.liveTv.joinSession), findsOneWidget);
+    expect(find.text(t.liveTv.watchFromStart(minutes: 10)), findsOneWidget);
+    expect(find.text(t.liveTv.watchLive), findsOneWidget);
+    expect(find.text(t.common.resume), findsNothing);
+    Navigator.of(tester.element(find.text(t.liveTv.joinSession))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(VideoPlayerScreen), findsNothing);
+  });
+
+  test('overlapping recordings prefer the latest airing', () {
+    MediaItem item(String id, String start) =>
+        MediaItem(id: id, backend: MediaBackend.emby, kind: MediaKind.clip, raw: {'StartDate': start});
+    final older = item('old', '2026-10-30T19:00:00Z');
+    final newer = item('new', '2026-10-30T20:00:00Z');
+    expect(latestInProgressRecording([older, newer]), same(newer));
+    expect(latestInProgressRecording([newer, older]), same(newer));
+  });
 
   test('scoped Live TV selection fails closed and unscoped selection retains fallback', () {
     final aDvr = LiveTvServerInfo(serverId: 'server-a', dvrKey: 'dvr-a');
@@ -147,4 +218,25 @@ class _TestClient implements MediaServerClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingClient extends _TestClient implements InProgressRecordingSupport {
+  _RecordingClient(super.serverId, this.recordings);
+  final List<MediaItem> recordings;
+  String? requestedChannel;
+  @override
+  MediaBackend get backend => MediaBackend.emby;
+  @override
+  Future<List<MediaItem>> fetchInProgressRecordings({String? channelId}) async {
+    requestedChannel = channelId;
+    return recordings;
+  }
+}
+
+class _PlayerObserver extends NavigatorObserver {
+  VideoPlayerRoute? playerRoute;
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is VideoPlayerRoute) playerRoute = route;
+  }
 }
