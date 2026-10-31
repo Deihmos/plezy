@@ -411,7 +411,17 @@ _PlaybackOpenTiming _playbackOpenTiming({
   required Duration? resumePosition,
   required int? durationMs,
   MediaPartTimeline? partTimeline,
+  Duration streamStartOffset = Duration.zero,
 }) {
+  if (streamStartOffset > Duration.zero) {
+    return _PlaybackOpenTiming(
+      mediaStart: streamStartOffset,
+      timelineOffset: streamStartOffset,
+      timelineDuration: durationMs != null && durationMs > streamStartOffset.inMilliseconds
+          ? Duration(milliseconds: durationMs)
+          : null,
+    );
+  }
   if (partTimeline != null) {
     // One file of a stacked item: the player lays it onto the item timeline.
     // A resume it does not hold — the file holding it is gone, or a download

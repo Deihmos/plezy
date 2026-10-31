@@ -995,6 +995,45 @@ void main() {
       expect(uri.queryParameters['Container'], 'mp4');
     });
 
+    test('Emby growing recordings resume through a server-positioned stream even at Original quality', () async {
+      final bodies = <Map<String, dynamic>>[];
+      final scoped = _clientWithPlaybackInfo((request) async {
+        bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+        return jsonResponse({
+          'MediaSources': [
+            {
+              'Id': 'src-1',
+              'Container': 'ts',
+              'SupportsDirectPlay': false,
+              'TranscodingUrl': '/Videos/item-1/master.m3u8?MediaSourceId=src-1&PlaySessionId=resume-1',
+              'MediaStreams': [],
+            },
+          ],
+        });
+      });
+      addTearDown(scoped.close);
+      final result = await scoped.getPlaybackInitialization(
+        PlaybackInitializationOptions(
+          metadata: testMediaItem(
+            id: 'item-1',
+            backend: MediaBackend.emby,
+            kind: MediaKind.movie,
+            viewOffsetMs: 0,
+            raw: {'IsInProgress': true},
+          ),
+          selectedMediaIndex: 0,
+          startPosition: const Duration(seconds: 90),
+        ),
+      );
+      expect(bodies.single['StartTimeTicks'], 900000000);
+      expect(bodies.single['EnableDirectPlay'], isFalse);
+      expect(bodies.single['EnableDirectStream'], isFalse);
+      expect(bodies.single['EnableTranscoding'], isTrue);
+      expect(Uri.parse(result.videoUrl!).queryParameters['StartTimeTicks'], '900000000');
+      expect(result.streamStartOffset, const Duration(seconds: 90));
+      expect(result.isTranscoding, isTrue);
+    });
+
     test('getPlaybackInitialization sends resume ticks without rewriting TranscodingUrl', () async {
       final playbackInfoUris = <Uri>[];
       final playbackInfoBodies = <String>[];

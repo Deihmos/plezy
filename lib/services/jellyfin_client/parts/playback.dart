@@ -331,7 +331,12 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         ? audioPreset.bitrateKbps! * 1000
         : (preset.videoBitrateKbps ?? 100_000) * 1000;
     final resumeOffsetMs = options.startPosition?.inMilliseconds ?? metadata.viewOffsetMs;
-    final int? transcodeStartTimeTicks = !wantsOriginal && resumeOffsetMs != null && resumeOffsetMs > 0
+    // Emby serves growing recordings as non-seekable raw TS. Resume must
+    // position the server stream; client seeks can only hit cached bytes.
+    final serverRecordingResume =
+        metadata.backend == MediaBackend.emby && metadata.isRecordingInProgress && (resumeOffsetMs ?? 0) > 0;
+    final int? transcodeStartTimeTicks =
+        (!wantsOriginal || serverRecordingResume) && resumeOffsetMs != null && resumeOffsetMs > 0
         ? msToJellyfinTicks(resumeOffsetMs)
         : null;
     Map<String, dynamic>? negotiation;
@@ -342,6 +347,9 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         maxStreamingBitrate: maxStreamingBitrate,
         mediaSourceId: bundle.selectedSourceId,
         startTimeTicks: transcodeStartTimeTicks,
+        enableDirectPlay: serverRecordingResume ? false : null,
+        enableDirectStream: serverRecordingResume ? false : null,
+        enableTranscoding: serverRecordingResume ? true : null,
         audioStreamIndex: requestedAudioStreamId,
         subtitleStreamIndex: requestedSubtitleStreamId,
         audioProfile: isTrack,
@@ -353,7 +361,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       );
       chosenSource = _selectNegotiatedMediaSource(negotiation['MediaSources'], bundle.selectedSourceId);
     } catch (error, stackTrace) {
-      if (!_canUseJellyfinStaticStreamFallback(error)) {
+      if (serverRecordingResume || !_canUseJellyfinStaticStreamFallback(error)) {
         Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
       }
       appLogger.w(
@@ -381,7 +389,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       }
 
       final transcodingUrl = chosenSource['TranscodingUrl'];
-      if (!wantsOriginal && transcodingUrl is String && transcodingUrl.isNotEmpty) {
+      if ((!wantsOriginal || serverRecordingResume) && transcodingUrl is String && transcodingUrl.isNotEmpty) {
         // TranscodingUrl is server-relative and already encodes container,
         // codecs, MediaSourceId, and PlaySessionId; we just append the
         // dialect's token query parameter for auth.
@@ -390,7 +398,20 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         playSessionId = urlSessionId != null && urlSessionId.isNotEmpty
             ? urlSessionId
             : (negotiatedSessionId is String ? negotiatedSessionId : null);
-        videoUrl = _withApiKey(transcodingUrl);
+        final streamUri = Uri.parse(transcodingUrl);
+        videoUrl = _withApiKey(
+          serverRecordingResume
+              ? streamUri
+                    .replace(
+                      queryParameters: {
+                        for (final entry in streamUri.queryParameters.entries)
+                          if (entry.key.toLowerCase() != 'starttimeticks') entry.key: entry.value,
+                        'StartTimeTicks': transcodeStartTimeTicks.toString(),
+                      },
+                    )
+                    .toString()
+              : transcodingUrl,
+        );
         playMethod = 'Transcode';
         isTranscoding = true;
       } else if (!wantsOriginal && chosenSource['SupportsDirectPlay'] != true) {
@@ -399,6 +420,11 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         // `TranscodingUrl`, which is the capped request succeeding.
         fallbackReason = TranscodeFallbackReason.directPlayOnly;
       }
+    }
+
+    if (serverRecordingResume && !isTranscoding) {
+      // A static fallback would silently restart the same unseekable stream.
+      throw PlaybackException(t.messages.noVideoUrl, reason: PlaybackFailureReason.noPlayableSource);
     }
 
     final effectiveAudioStreamId = _resolveJellyfinAudioStreamId(requestedAudioStreamId, mediaInfo);
@@ -443,6 +469,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       subtitleSidecars: subtitleSidecars,
       isOffline: false,
       isTranscoding: isTranscoding,
+      streamStartOffset: serverRecordingResume ? Duration(milliseconds: resumeOffsetMs!) : Duration.zero,
       fallbackReason: fallbackReason,
       activeAudioStreamId: requestedAudioStreamId,
       playSessionId: playSessionId,

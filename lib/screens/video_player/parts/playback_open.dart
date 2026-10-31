@@ -1088,6 +1088,7 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
         resumePosition: resumePosition(),
         durationMs: metadata.durationMs,
         partTimeline: result.mediaInfo?.partTimeline,
+        streamStartOffset: result.streamStartOffset,
       );
       if (!isCurrent()) return false;
       final openResult = await _openMediaOnPlayer(

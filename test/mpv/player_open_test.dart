@@ -860,8 +860,22 @@ void main() {
           try {
             await player.open(Media('https://example.test/recording.ts', start: const Duration(seconds: 90)));
             expect((_loadfileArgs(calls).last as String).split(','), contains('start=90.0'));
+            calls.clear();
             await player.open(Media('https://example.test/recording.ts', start: Duration.zero));
             expect((_loadfileArgs(calls).last as String).split(','), contains('start=none'));
+            calls.clear();
+            await player.open(
+              Media('https://example.test/resumed.m3u8', start: const Duration(seconds: 90)),
+              timelineOffset: const Duration(seconds: 90),
+              timelineDuration: const Duration(hours: 1),
+            );
+            expect(
+              (_loadfileArgs(calls).last as String).split(','),
+              contains('start=none'),
+              reason: 'the server already applied the bookmark; do not seek the source again',
+            );
+            player.handlePropertyChange('time-pos', 5.0);
+            expect(player.currentPosition, const Duration(seconds: 95));
           } finally {
             await player.dispose();
           }
