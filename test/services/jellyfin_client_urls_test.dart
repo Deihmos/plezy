@@ -996,7 +996,7 @@ void main() {
       expect(uri.queryParameters['Container'], 'mp4');
     });
 
-    test('Emby growing recordings resume through a server-positioned stream even at Original quality', () async {
+    test('Emby growing recordings keep the HLS master and client resume at Original quality', () async {
       final bodies = <Map<String, dynamic>>[];
       final scoped = _clientWithPlaybackInfo((request) async {
         bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
@@ -1028,13 +1028,14 @@ void main() {
       );
       expect(bodies.single['StartTimeTicks'], 900000000);
       expect(bodies.single['EnableDirectPlay'], isFalse);
-      expect(bodies.single['EnableDirectStream'], isFalse);
+      expect(bodies.single['EnableDirectStream'], isTrue);
+      expect(bodies.single['MaxStreamingBitrate'], 200000000);
       expect(bodies.single['EnableTranscoding'], isTrue);
       final profiles = (bodies.single['DeviceProfile'] as Map)['TranscodingProfiles'] as List;
       expect(profiles.where((profile) => profile['Type'] == 'Video').map((profile) => profile['Container']), ['ts']);
-      expect(Uri.parse(result.videoUrl!).path, '/Videos/item-1/live.m3u8');
+      expect(Uri.parse(result.videoUrl!).path, '/Videos/item-1/master.m3u8');
       expect(Uri.parse(result.videoUrl!).queryParameters['StartTimeTicks'], '900000000');
-      expect(result.streamStartOffset, const Duration(seconds: 90));
+      expect(result.streamStartOffset, Duration.zero);
       expect(result.isTranscoding, isTrue);
     });
 
@@ -1073,8 +1074,10 @@ void main() {
       expect(requests.first['MediaSourceId'], 'src-1');
       expect(requests.last.containsKey('MediaSourceId'), isFalse);
       expect(requests.last['StartTimeTicks'], 900000000);
+      expect(requests.last['EnableDirectStream'], isTrue);
+      expect(requests.last['MaxStreamingBitrate'], 200000000);
       expect(result.selectedMediaSourceId, 'active-recording-source');
-      expect(result.streamStartOffset, const Duration(seconds: 90));
+      expect(result.streamStartOffset, Duration.zero);
       expect(result.isTranscoding, isTrue);
     });
 

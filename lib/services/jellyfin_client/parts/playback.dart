@@ -324,19 +324,23 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
               track.isExternalFile &&
               CodecUtils.isTextSubtitleCodec(track.codec),
         );
+    final resumeOffsetMs = options.startPosition?.inMilliseconds ?? metadata.viewOffsetMs;
+    // A growing Emby recording needs seekable HLS segments, rather than its
+    // unseekable raw TS response. The player still seeks to the bookmark:
+    // Emby's live HLS encoder starts at the beginning of the recording.
+    final recordingResume =
+        metadata.backend == MediaBackend.emby && metadata.isRecordingInProgress && (resumeOffsetMs ?? 0) > 0;
     final int? maxStreamingBitrate = wantsOriginal
-        ? null
+        // Omitting this lets Emby apply its 8 Mbps default, unnecessarily
+        // encoding a recording that could be remuxed into segments quickly.
+        ? recordingResume
+              ? 200_000_000
+              : null
         : isTrack
-        // Non-original audio presets always carry a bitrate by construction.
         ? audioPreset.bitrateKbps! * 1000
         : (preset.videoBitrateKbps ?? 100_000) * 1000;
-    final resumeOffsetMs = options.startPosition?.inMilliseconds ?? metadata.viewOffsetMs;
-    // Emby serves growing recordings as non-seekable raw TS. Resume must
-    // position the server stream; client seeks can only hit cached bytes.
-    final serverRecordingResume =
-        metadata.backend == MediaBackend.emby && metadata.isRecordingInProgress && (resumeOffsetMs ?? 0) > 0;
     final int? transcodeStartTimeTicks =
-        (!wantsOriginal || serverRecordingResume) && resumeOffsetMs != null && resumeOffsetMs > 0
+        (!wantsOriginal || recordingResume) && resumeOffsetMs != null && resumeOffsetMs > 0
         ? msToJellyfinTicks(resumeOffsetMs)
         : null;
     Map<String, dynamic>? negotiation;
@@ -347,10 +351,10 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         maxStreamingBitrate: maxStreamingBitrate,
         mediaSourceId: bundle.selectedSourceId,
         startTimeTicks: transcodeStartTimeTicks,
-        enableDirectPlay: serverRecordingResume ? false : null,
-        enableDirectStream: serverRecordingResume ? false : null,
-        enableTranscoding: serverRecordingResume ? true : null,
-        isLiveTv: serverRecordingResume,
+        enableDirectPlay: recordingResume ? false : null,
+        enableDirectStream: recordingResume ? true : null,
+        enableTranscoding: recordingResume ? true : null,
+        isLiveTv: recordingResume,
         audioStreamIndex: requestedAudioStreamId,
         subtitleStreamIndex: requestedSubtitleStreamId,
         audioProfile: isTrack,
@@ -358,10 +362,10 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         // burns the selected embedded stream in rather than serving it as a file the client
         // would fetch as well. A selected external *file* keeps `External`, so it is still
         // delivered as a file - the one case where the client genuinely holds it.
-        burnSubtitles: (!wantsOriginal || serverRecordingResume) && !requestedSubtitleIsExternalFile,
+        burnSubtitles: (!wantsOriginal || recordingResume) && !requestedSubtitleIsExternalFile,
       );
       chosenSource = _selectNegotiatedMediaSource(negotiation['MediaSources'], bundle.selectedSourceId);
-      if (serverRecordingResume) {
+      if (recordingResume) {
         void logRecordingSources(String phase, Map<String, dynamic> response) {
           final rawSources = response['MediaSources'];
           final sources = rawSources is List
@@ -384,7 +388,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
             maxStreamingBitrate: maxStreamingBitrate,
             startTimeTicks: transcodeStartTimeTicks,
             enableDirectPlay: false,
-            enableDirectStream: false,
+            enableDirectStream: true,
             enableTranscoding: true,
             isLiveTv: true,
             audioStreamIndex: requestedAudioStreamId,
@@ -399,7 +403,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
         }
       }
     } catch (error, stackTrace) {
-      if (serverRecordingResume || !_canUseJellyfinStaticStreamFallback(error)) {
+      if (recordingResume || !_canUseJellyfinStaticStreamFallback(error)) {
         Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
       }
       appLogger.w(
@@ -427,7 +431,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       }
 
       final transcodingUrl = chosenSource['TranscodingUrl'];
-      if ((!wantsOriginal || serverRecordingResume) && transcodingUrl is String && transcodingUrl.isNotEmpty) {
+      if ((!wantsOriginal || recordingResume) && transcodingUrl is String && transcodingUrl.isNotEmpty) {
         // TranscodingUrl is server-relative and already encodes container,
         // codecs, MediaSourceId, and PlaySessionId; we just append the
         // dialect's token query parameter for auth.
@@ -437,9 +441,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
             ? urlSessionId
             : (negotiatedSessionId is String ? negotiatedSessionId : null);
         videoUrl = _withApiKey(
-          serverRecordingResume
-              ? buildEmbyRecordingResumeUrl(transcodingUrl, transcodeStartTimeTicks!)
-              : transcodingUrl,
+          recordingResume ? buildEmbyRecordingResumeUrl(transcodingUrl, transcodeStartTimeTicks!) : transcodingUrl,
         );
         playMethod = 'Transcode';
         isTranscoding = true;
@@ -451,7 +453,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       }
     }
 
-    if (serverRecordingResume && !isTranscoding) {
+    if (recordingResume && !isTranscoding) {
       // A static fallback would silently restart the same unseekable stream.
       throw PlaybackException(t.messages.noVideoUrl, reason: PlaybackFailureReason.noPlayableSource);
     }
@@ -498,13 +500,12 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
       subtitleSidecars: subtitleSidecars,
       isOffline: false,
       isTranscoding: isTranscoding,
-      streamStartOffset: serverRecordingResume ? Duration(milliseconds: resumeOffsetMs!) : Duration.zero,
       fallbackReason: fallbackReason,
       activeAudioStreamId: requestedAudioStreamId,
       playSessionId: playSessionId,
       playMethod: playMethod,
       selectedMediaIndex: bundle.selectedSourceIndex,
-      selectedMediaSourceId: serverRecordingResume ? effectiveSourceId : null,
+      selectedMediaSourceId: recordingResume ? effectiveSourceId : null,
     );
   }
 

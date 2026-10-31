@@ -62,16 +62,13 @@ String buildJellyfinTrickplayTileUrl({
 String _encodeQuery(Map<String, String> params) =>
     params.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
 
-/// Emby's master playlist does not forward StartTimeTicks to live.m3u8.
-/// Open the observed media-playlist route directly so the server receives it.
+/// Keep Emby's negotiated master playlist: its bootstrap must run before the
+/// player opens the child playlist. The bookmark also goes to the player;
+/// StartTimeTicks does not position the live encoder by itself.
 String buildEmbyRecordingResumeUrl(String transcodingUrl, int startTimeTicks) {
   final uri = Uri.parse(transcodingUrl);
-  final path = uri.path.toLowerCase().endsWith('/master.m3u8')
-      ? '${uri.path.substring(0, uri.path.length - 'master.m3u8'.length)}live.m3u8'
-      : uri.path;
   return uri
       .replace(
-        path: path,
         queryParameters: {
           for (final entry in uri.queryParameters.entries)
             if (entry.key.toLowerCase() != 'starttimeticks') entry.key: entry.value,
